@@ -1,0 +1,131 @@
+<svg viewBox="0 0 1152 760" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace">
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#65b7ff"/></marker></defs>
+<rect width="1152" height="760" fill="#0a1120"/>
+<text x="28" y="30" fill="#5be0ac" font-size="17" font-weight="bold">SEDAKEP TARGET ERD — SIMPLE VERSION</text>
+<text x="28" y="51" fill="#9fb0ca" font-size="11.5">Approval terkini disimpan di tabel pengajuan; tabel detail hanya untuk relasi 1:N yang nyata.</text>
+<text x="28" y="61" fill="#7f8ea8" font-size="10.5">MASTER DATA</text>
+<line x1="28" y1="68" x2="1124" y2="68" stroke="#293a59"/>
+<text x="28" y="233" fill="#7f8ea8" font-size="10.5">PENGAJUAN</text>
+<line x1="28" y1="240" x2="1124" y2="240" stroke="#293a59"/>
+<text x="28" y="405" fill="#7f8ea8" font-size="10.5">DETAIL 1:N</text>
+<line x1="28" y1="412" x2="1124" y2="412" stroke="#293a59"/>
+<text x="28" y="577" fill="#7f8ea8" font-size="10.5">STORAGE / AUDIT / MIGRASI</text>
+<line x1="28" y1="584" x2="1124" y2="584" stroke="#293a59"/>
+<path d="M153.0,178 L153.0,214 L153.0,214 L153.0,250" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,178 L153.0,214 L435.0,214 L435.0,250" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,178 L153.0,214 L717.0,214 L717.0,250" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,178 L153.0,214 L999.0,214 L999.0,250" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,178 L153.0,300 L153.0,300 L153.0,422" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M435.0,128.0 L717.0,128.0" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M999.0,178 L999.0,214 L717.0,214 L717.0,250" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M717.0,350 L717.0,386 L717.0,386 L717.0,422" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M999.0,350 L999.0,386 L999.0,386 L999.0,422" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,472.0 L435.0,472.0" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M999.0,178 L999.0,300 L435.0,300 L435.0,422" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M999.0,178 L999.0,386 L153.0,386 L153.0,594" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,178 L153.0,386 L435.0,386 L435.0,594" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M999.0,178 L999.0,386 L999.0,386 L999.0,594" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<rect x="28" y="78" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="40" y="99" fill="#65b7ff" font-size="13.5" font-weight="bold">users</text>
+<text x="268" y="99" fill="#5be0ac" font-size="9.5" text-anchor="end">master</text>
+<text x="40" y="121" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="40" y="136" fill="#ffd166" font-size="10.5">username UNIQUE</text>
+<text x="40" y="151" fill="#dce8fa" font-size="10.5">password_hash</text>
+<text x="40" y="166" fill="#dce8fa" font-size="10.5">role, employee_no</text>
+<rect x="310" y="78" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="322" y="99" fill="#65b7ff" font-size="13.5" font-weight="bold">organizations</text>
+<text x="550" y="99" fill="#5be0ac" font-size="9.5" text-anchor="end">master</text>
+<text x="322" y="121" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="322" y="136" fill="#dce8fa" font-size="10.5">name, code</text>
+<text x="322" y="151" fill="#dce8fa" font-size="10.5">address</text>
+<rect x="592" y="78" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="604" y="99" fill="#65b7ff" font-size="13.5" font-weight="bold">positions</text>
+<text x="832" y="99" fill="#5be0ac" font-size="9.5" text-anchor="end">master</text>
+<text x="604" y="121" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="604" y="136" fill="#ffd166" font-size="10.5">organization_id FK</text>
+<text x="604" y="151" fill="#dce8fa" font-size="10.5">name, grade</text>
+<rect x="874" y="78" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="886" y="99" fill="#65b7ff" font-size="13.5" font-weight="bold">documents</text>
+<text x="1114" y="99" fill="#5be0ac" font-size="9.5" text-anchor="end">storage</text>
+<text x="886" y="121" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="886" y="136" fill="#ffd166" font-size="10.5">object_key UNIQUE</text>
+<text x="886" y="151" fill="#dce8fa" font-size="10.5">bucket, sha256</text>
+<text x="886" y="166" fill="#dce8fa" font-size="10.5">size_bytes, mime_type</text>
+<rect x="28" y="250" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="40" y="271" fill="#65b7ff" font-size="13.5" font-weight="bold">leave_requests</text>
+<text x="268" y="271" fill="#5be0ac" font-size="9.5" text-anchor="end">request</text>
+<text x="40" y="293" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="40" y="308" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="40" y="323" fill="#dce8fa" font-size="10.5">leave fields + dates</text>
+<text x="40" y="338" fill="#dce8fa" font-size="10.5">status + approval snapshot</text>
+<rect x="310" y="250" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="322" y="271" fill="#65b7ff" font-size="13.5" font-weight="bold">leave_quotas</text>
+<text x="550" y="271" fill="#5be0ac" font-size="9.5" text-anchor="end">request</text>
+<text x="322" y="293" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="322" y="308" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="322" y="323" fill="#dce8fa" font-size="10.5">year, quota, used</text>
+<text x="322" y="338" fill="#dce8fa" font-size="10.5">remaining</text>
+<rect x="592" y="250" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="604" y="271" fill="#65b7ff" font-size="13.5" font-weight="bold">incoming_letters</text>
+<text x="832" y="271" fill="#5be0ac" font-size="9.5" text-anchor="end">request</text>
+<text x="604" y="293" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="604" y="308" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="604" y="323" fill="#dce8fa" font-size="10.5">number, subject</text>
+<text x="604" y="338" fill="#dce8fa" font-size="10.5">status + file_id</text>
+<rect x="874" y="250" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="886" y="271" fill="#65b7ff" font-size="13.5" font-weight="bold">assignment_letters</text>
+<text x="1114" y="271" fill="#5be0ac" font-size="9.5" text-anchor="end">request</text>
+<text x="886" y="293" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="886" y="308" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="886" y="323" fill="#dce8fa" font-size="10.5">number, subject</text>
+<text x="886" y="338" fill="#dce8fa" font-size="10.5">status + approval</text>
+<rect x="28" y="422" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="40" y="443" fill="#65b7ff" font-size="13.5" font-weight="bold">employee_services</text>
+<text x="268" y="443" fill="#5be0ac" font-size="9.5" text-anchor="end">request</text>
+<text x="40" y="465" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="40" y="480" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="40" y="495" fill="#dce8fa" font-size="10.5">service_type</text>
+<text x="40" y="510" fill="#dce8fa" font-size="10.5">status + approval snapshot</text>
+<rect x="592" y="422" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="604" y="443" fill="#65b7ff" font-size="13.5" font-weight="bold">dispositions</text>
+<text x="832" y="443" fill="#5be0ac" font-size="9.5" text-anchor="end">detail</text>
+<text x="604" y="465" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="604" y="480" fill="#ffd166" font-size="10.5">letter_id FK</text>
+<text x="604" y="495" fill="#dce8fa" font-size="10.5">from/to user</text>
+<text x="604" y="510" fill="#dce8fa" font-size="10.5">status, note</text>
+<rect x="874" y="422" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="886" y="443" fill="#65b7ff" font-size="13.5" font-weight="bold">assignment_members</text>
+<text x="1114" y="443" fill="#5be0ac" font-size="9.5" text-anchor="end">detail</text>
+<text x="886" y="465" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="886" y="480" fill="#ffd166" font-size="10.5">assignment_id FK</text>
+<text x="886" y="495" fill="#dce8fa" font-size="10.5">employee_name, nip</text>
+<text x="886" y="510" fill="#dce8fa" font-size="10.5">role</text>
+<rect x="310" y="422" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="322" y="443" fill="#65b7ff" font-size="13.5" font-weight="bold">service_documents</text>
+<text x="550" y="443" fill="#5be0ac" font-size="9.5" text-anchor="end">detail</text>
+<text x="322" y="465" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="322" y="480" fill="#ffd166" font-size="10.5">service_id FK</text>
+<text x="322" y="495" fill="#ffd166" font-size="10.5">document_id FK</text>
+<text x="322" y="510" fill="#dce8fa" font-size="10.5">document_type</text>
+<rect x="28" y="594" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="40" y="615" fill="#65b7ff" font-size="13.5" font-weight="bold">document_links</text>
+<text x="268" y="615" fill="#5be0ac" font-size="9.5" text-anchor="end">detail</text>
+<text x="40" y="637" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="40" y="652" fill="#ffd166" font-size="10.5">document_id FK</text>
+<text x="40" y="667" fill="#dce8fa" font-size="10.5">entity_type/id</text>
+<text x="40" y="682" fill="#dce8fa" font-size="10.5">field_name</text>
+<rect x="310" y="594" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="322" y="615" fill="#65b7ff" font-size="13.5" font-weight="bold">audit_logs</text>
+<text x="550" y="615" fill="#5be0ac" font-size="9.5" text-anchor="end">tracking</text>
+<text x="322" y="637" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="322" y="652" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="322" y="667" fill="#dce8fa" font-size="10.5">action</text>
+<text x="322" y="682" fill="#dce8fa" font-size="10.5">entity_type/id</text>
+<rect x="874" y="594" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="886" y="615" fill="#65b7ff" font-size="13.5" font-weight="bold">migration_items</text>
+<text x="1114" y="615" fill="#5be0ac" font-size="9.5" text-anchor="end">tracking</text>
+<text x="886" y="637" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="886" y="652" fill="#ffd166" font-size="10.5">source_identity UNIQUE</text>
+<text x="886" y="667" fill="#dce8fa" font-size="10.5">object_key</text>
+<text x="886" y="682" fill="#dce8fa" font-size="10.5">sha256, status</text>
+</svg>

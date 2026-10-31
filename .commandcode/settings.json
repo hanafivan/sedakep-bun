@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(bun:*)",
+      "Shell(cd /Users/hanafi/Pekerjaan/codebase-hono && LOG=\"$COMMANDCODE_SCRATCHPAD/test.log\" && NODE_ENV=development bun test > \"$LOG\" 2>&1; echo \"exit=$?\"; echo \"pass=$(grep -c '(pass)' \"$LOG\") fail=$(grep -c '(fail)' \"$LOG\")\"; echo \"--- failures ---\"; grep -E '\\(fail\\)' \"$LOG\" | sed -n '1,60p'; echo \"--- summary ---\"; grep -E '^ *[0-9]+ (pass|fail)|tests? across|expect\\(\\) calls' \"$LOG\" | sed -n '1,20p')",
+      "Shell(/Applications/XAMPP/xamppfiles/bin/mysql:*)",
+      "Shell(grep:*)",
+      "Shell(/Applications/XAMPP/xamppfiles/bin/mysql -h127.0.0.1 -uroot --table < \"$COMMANDCODE_SCRATCHPAD/discrepancy2.sql\" 2>&1 | sed -n '1,80p')",
+      "Shell(for:*)",
+      "Shell(do:*)",
+      "Shell(done:*)",
+      "Shell(bunx tsc --noEmit)",
+      "Shell(ls -la .env* 2>/dev/null; echo \"---\"; cat .env 2>/dev/null | grep -i mysql)",
+      "Shell(cat:*)",
+      "Shell(git:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

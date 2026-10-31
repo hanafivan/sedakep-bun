@@ -9,6 +9,7 @@ export type ErrorCode =
   | 'UNAUTHORIZED'
   | 'CONFLICT'
   | 'NOT_FOUND'
+  | 'FORBIDDEN'
   | 'INTERNAL';
 
 export class AppError extends Error {
@@ -28,3 +29,4 @@ export const badRequest  = (msg: string) => new AppError('VALIDATION', msg, 422)
 export const unauthorized = (msg = 'Unauthorized') => new AppError('UNAUTHORIZED', msg, 401);
 export const conflict    = (msg: string) => new AppError('CONFLICT', msg, 409);
 export const notFound    = (msg: string) => new AppError('NOT_FOUND', msg, 404);
+export const forbidden   = (msg = 'Forbidden') => new AppError('FORBIDDEN', msg, 403);

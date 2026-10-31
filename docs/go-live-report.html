@@ -1,0 +1,42 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Laporan go-live Sedakep</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 32px; color: #1a1a2e; }
+  h1 { font-size: 20px; } .stamp { color: #667; font-size: 13px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 16px; font-size: 13px; }
+  th, td { border: 1px solid #ccd; padding: 6px 10px; text-align: left; }
+  th { background: #f0f2fb; }
+  .ok { color: #1a7f4b; } .warn { color: #a56a00; }
+</style>
+<h1>Laporan go-live Sedakep</h1>
+<p class="stamp">Dibuat 2026-10-13T23:10:11.489Z</p>
+<table>
+  <thead><tr><th>Modul</th><th>Tabel sumber</th><th>Tabel target</th><th>Sumber</th><th>Target</th><th>Catatan</th></tr></thead>
+  <tbody>
+<tr><td>Users</td><td>tbl_user</td><td>users</td><td style="text-align:right">1730</td><td style="text-align:right">1734</td><td>lebih 4 (perlu penjelasan)</td></tr>
+<tr><td>Cuti (permohonan)</td><td>tbl_surat_masuk</td><td>leave_requests</td><td style="text-align:right">7926</td><td style="text-align:right">7926</td><td>cocok</td></tr>
+<tr><td>Surat keterangan cuti</td><td>tbl_suket</td><td>leave_letters</td><td style="text-align:right">3367</td><td style="text-align:right">0</td><td>kurang 3367 (migrasi belum / sebagian)</td></tr>
+<tr><td>Surat tugas</td><td>hlm_surtug</td><td>assignment_letters</td><td style="text-align:right">3194</td><td style="text-align:right">0</td><td>kurang 3194 (migrasi belum / sebagian)</td></tr>
+<tr><td>Surat tugas - pegawai</td><td>hlm_surtug_peg</td><td>assignment_members</td><td style="text-align:right">14224</td><td style="text-align:right">0</td><td>kurang 14224 (migrasi belum / sebagian)</td></tr>
+<tr><td>Surat tugas - keterangan</td><td>hlm_surtug_ket</td><td>assignment_notes</td><td style="text-align:right">3864</td><td style="text-align:right">0</td><td>kurang 3864 (migrasi belum / sebagian)</td></tr>
+<tr><td>Surat tugas - tembusan</td><td>hlm_surtug_tembus</td><td>assignment_copies</td><td style="text-align:right">3235</td><td style="text-align:right">0</td><td>kurang 3235 (migrasi belum / sebagian)</td></tr>
+<tr><td>Alibi</td><td>hlm_alibi</td><td>alibi_requests</td><td style="text-align:right">6057</td><td style="text-align:right">0</td><td>kurang 6057 (migrasi belum / sebagian)</td></tr>
+<tr><td>Agenda</td><td>hlm_agenda</td><td>agendas</td><td style="text-align:right">2484</td><td style="text-align:right">0</td><td>kurang 2484 (migrasi belum / sebagian)</td></tr>
+<tr><td>Surat masuk</td><td>hlm_edispo</td><td>incoming_letters</td><td style="text-align:right">6790</td><td style="text-align:right">0</td><td>kurang 6790 (migrasi belum / sebagian)</td></tr>
+<tr><td>Disposisi</td><td>hlm_edispo_disposisi</td><td>dispositions</td><td style="text-align:right">6835</td><td style="text-align:right">0</td><td>kurang 6835 (migrasi belum / sebagian)</td></tr>
+<tr><td>Klasifikasi surat</td><td>hlm_edispo_klasifikasi</td><td>letter_classifications</td><td style="text-align:right">3</td><td style="text-align:right">0</td><td>kurang 3 (migrasi belum / sebagian)</td></tr>
+<tr><td>Pensiun</td><td>hlm_pens_reg_usul</td><td>service_requests</td><td style="text-align:right">302</td><td style="text-align:right">0</td><td>kurang 302 (migrasi belum / sebagian)</td></tr>
+<tr><td>Gelar</td><td>hlm_gelar</td><td>service_requests</td><td style="text-align:right">173</td><td style="text-align:right">0</td><td>kurang 173 (migrasi belum / sebagian)</td></tr>
+<tr><td>Karpeg</td><td>hlm_karpeg</td><td>service_requests</td><td style="text-align:right">7</td><td style="text-align:right">0</td><td>kurang 7 (migrasi belum / sebagian)</td></tr>
+<tr><td>Karis/Karsu</td><td>hlm_karisu</td><td>service_requests</td><td style="text-align:right">210</td><td style="text-align:right">0</td><td>kurang 210 (migrasi belum / sebagian)</td></tr>
+<tr><td>BPJS</td><td>hlm_bpjs</td><td>service_requests</td><td style="text-align:right">306</td><td style="text-align:right">0</td><td>kurang 306 (migrasi belum / sebagian)</td></tr>
+<tr><td>Taspen</td><td>hlm_taspen</td><td>service_requests</td><td style="text-align:right">39</td><td style="text-align:right">0</td><td>kurang 39 (migrasi belum / sebagian)</td></tr>
+<tr><td>Satya Lencana</td><td>hlm_satlen</td><td>service_requests</td><td style="text-align:right">174</td><td style="text-align:right">0</td><td>kurang 174 (migrasi belum / sebagian)</td></tr>
+<tr><td>Izin belajar</td><td>hlm_ibel</td><td>service_requests</td><td style="text-align:right">72</td><td style="text-align:right">0</td><td>kurang 72 (migrasi belum / sebagian)</td></tr>
+<tr><td>Tugas belajar</td><td>tugas_belajar</td><td>service_requests</td><td style="text-align:right">8</td><td style="text-align:right">0</td><td>kurang 8 (migrasi belum / sebagian)</td></tr>
+<tr><td>Pangkat</td><td>hlm_pangkat</td><td>service_requests</td><td style="text-align:right">11</td><td style="text-align:right">0</td><td>kurang 11 (migrasi belum / sebagian)</td></tr>
+  </tbody>
+</table>
+<p class="stamp">Catatan: migrasi isi data (Fase 9/10) saat ini ditunda; angka "kurang" adalah
+kondisi yang diharapkan sampai keputusan migrasi diambil. Lihat docs/cutover-runbook.md.</p>

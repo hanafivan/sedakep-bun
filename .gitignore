@@ -6,3 +6,6 @@ data/
 *.sqlite-shm
 .env
 .DS_Store
+
+# MinIO data lokal (dev)
+.minio-data/

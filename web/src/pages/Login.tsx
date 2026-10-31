@@ -1,70 +1,111 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Card } from '../App';
-import { login, setToken } from '../api';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth';
+
+/** Halaman masuk. */
 
 export function Login() {
+  const { user, login } = useAuth();
   const navigate = useNavigate();
-  const [username, setUsername] = useState('hanafi');
-  const [password, setPassword] = useState('password123');
-  const [output, setOutput] = useState('Belum ada request.');
-  const [status, setStatus] = useState<'' | 'ok' | 'err'>('');
+  const location = useLocation();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const onSubmit = async (event: React.FormEvent) => {
+  if (user) {
+    const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
+    return <Navigate to={from} replace />;
+  }
+
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
-    setStatus('');
-    setOutput('Memproses...');
-
+    setError(null);
     try {
-      const result = await login(username, password);
-      setToken(result.data.token);
-      setStatus('ok');
-      setOutput(`Login berhasil. Token disimpan.\n\n${JSON.stringify(result, null, 2)}`);
-      navigate('/dashboard');
-    } catch (error) {
-      setStatus('err');
-      setOutput(`Gagal: ${(error as Error).message}`);
+      await login(username.trim(), password);
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal masuk');
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Card title="Login" sub="Masuk untuk mendapatkan JWT.">
-      <form onSubmit={onSubmit}>
-        <label htmlFor="username">Username</label>
-        <input
-          id="username"
-          value={username}
-          autoComplete="username"
-          onChange={(e) => setUsername(e.target.value)}
-          required
-        />
+    <div className="centered">
+      <form className="card login-card" onSubmit={submit}>
+        <div className="login-brand">
+          <div className="brand-badge">PTSP KEMENAG SLEMAN</div>
+          <h1>Sedakep</h1>
+          <p className="sub">Sistem Layanan Administrasi Kepegawaian</p>
+        </div>
 
-        <label htmlFor="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          autoComplete="current-password"
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
+        <div className="form-group">
+          <label htmlFor="username">Username / NIP</label>
+          <input
+            id="username"
+            placeholder="Masukkan username atau NIP"
+            value={username}
+            autoComplete="username"
+            onChange={(event) => setUsername(event.target.value)}
+          />
+        </div>
 
-        <button type="submit" disabled={busy}>
-          {busy ? 'Memproses...' : 'Login'}
+        <div className="form-group">
+          <label htmlFor="password">Kata Sandi</label>
+          <input
+            id="password"
+            type="password"
+            placeholder="Masukkan kata sandi"
+            value={password}
+            autoComplete="current-password"
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </div>
+
+        {error ? <p className="err login-err">{error}</p> : null}
+
+        <button className="login-submit" type="submit" disabled={busy || !username || !password}>
+          {busy ? 'Memverifikasi...' : 'Masuk ke Sistem'}
         </button>
+
+        <div className="demo-accounts">
+          <div className="demo-accounts-title">Isi otomatis akun simulasi:</div>
+          <div className="demo-chips">
+            <button
+              type="button"
+              className="chip-btn"
+              onClick={() => {
+                setUsername('admin.sedakep');
+                setPassword('demo1234');
+              }}
+            >
+              Admin
+            </button>
+            <button
+              type="button"
+              className="chip-btn"
+              onClick={() => {
+                setUsername('atasan.sedakep');
+                setPassword('demo1234');
+              }}
+            >
+              Atasan
+            </button>
+            <button
+              type="button"
+              className="chip-btn"
+              onClick={() => {
+                setUsername('pegawai.sedakep');
+                setPassword('demo1234');
+              }}
+            >
+              Pegawai
+            </button>
+          </div>
+        </div>
       </form>
-
-      <nav className="nav">
-        <Link to="/">Beranda</Link>
-        <Link to="/register">Register</Link>
-        <Link to="/dashboard">Dashboard</Link>
-      </nav>
-
-      <pre className={status}>{output}</pre>
-    </Card>
+    </div>
   );
 }
