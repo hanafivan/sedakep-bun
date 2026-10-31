@@ -1,0 +1,13 @@
+# Taste
+- Prefers the agent to first read the written plan, then execute it incrementally, one step at a time. Confidence: 0.8
+- Wants a notification / progress update each time a step is finished ("beri notifikasi jika sudah selesai per step"). Confidence: 0.8
+- Expects the agent to proceed confidently and autonomously without over-asking, but to ask for confirmation when genuinely uncertain ("lakukan dengan yakin, jika ragu konfirmasi"; "gausah konfirmasi kalau ga perlu jalankan saja"). Confidence: 0.85
+- Dislikes being asked the same/repetitive question more than once — wants the agent to just proceed ("don't ask me repetitive question gaskan saja"). Confidence: 0.7
+- Comfortable handing over several tasks at once and expecting them all to be carried through end-to-end without stopping to check in ("selesaikan surat tugas, selesaikan cuti, lanjut alibi, kerjakan semuanya"). Confidence: 0.75
+- Works with plans stored as markdown docs in the repo (e.g. `docs/*-plan.md`) and expects them to be kept up to date as steps complete. Confidence: 0.6
+- Prioritizes moving feature work forward over exhaustive verification: will explicitly tell the agent to skip/defer unit tests (and smoke runs) for now ("unit test skip dulu saja"). Confidence: 0.6
+- When verification is skipped or deferred at his request, wants that recorded honestly in the plan/results (e.g. "dilewati atas permintaan") rather than silently dropped. Confidence: 0.55
+- Communicates in Indonesian and expects replies, todos, and code comments in Indonesian. Confidence: 0.75
+- When deciding what to do next, prioritizes building out missing feature coverage over operational/migration/cutover work ("lanjut fitur dulu apa yang belum dicover?"; "sekarang fitur apa yang kurang di plan?"); expects the agent to enumerate the genuine remaining coverage gaps honestly, verified against the actual code state rather than just quoting the plan doc. Confidence: 0.7
+- Uses agent "skills" tooling, installs design-skill CLIs globally (e.g. `npx impeccable install`, skills resolved from `~/.agents/skills/`), and expects them to actually be applied to the work — e.g. asking to use the impeccable skill to redo the app's UI/UX rather than just installing it. Confidence: 0.55
+- For UI/UX work, prefers a bold whole-application redesign (a new, distinctive visual identity applied consistently across the entire app) over incremental polish or a single-page pilot. Confidence: 0.55

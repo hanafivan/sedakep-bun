@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Report Logic Cuti dan Kuota Sedakep</title><style>
+body{font-family:system-ui,-apple-system,sans-serif;line-height:1.55;color:#172033;max-width:1180px;margin:0 auto;padding:32px;background:#f5f7fb}main{background:#fff;padding:38px;border-radius:14px;box-shadow:0 2px 18px #15264a12}h1{margin-top:0;color:#123b72}h2{margin-top:38px;color:#174f91;border-bottom:2px solid #dbe8f7;padding-bottom:6px}h3{color:#27639a}table{border-collapse:collapse;width:100%;margin:14px 0 22px;font-size:.94rem}th,td{border:1px solid #d9e0ea;padding:8px;text-align:left;vertical-align:top}th{background:#eaf2fb}code,pre{background:#f1f4f8;border-radius:5px}code{padding:2px 5px}pre{padding:14px;overflow:auto}.warn{background:#fff4d8;border-left:5px solid #e4a400;padding:12px 16px}.danger{background:#ffebeb;border-left:5px solid #d33;padding:12px 16px}.ok{background:#eaf8ef;border-left:5px solid #299957;padding:12px 16px}.small{color:#536176;font-size:.9rem}.pill{display:inline-block;padding:3px 8px;border-radius:10px;background:#e8eef8;margin:2px 3px 2px 0}
+</style></head>
+<body><main>
+<h1>Report Logic Cuti dan Perhitungan Kuota</h1>
+<p class="small">Aplikasi sumber: <code>/Applications/XAMPP/htdocs/sedakep-ptsp-kemenag-sleman</code><br>Database: <code>ptsp_sedakep</code><br>Fokus: relasi <code>tbl_surat_masuk</code> sebagai permohonan cuti dan sumber transaksi kuota.</p>
+
+<h2>1. Kesimpulan eksekutif</h2>
+<div class="ok"><strong>Benar:</strong> <code>tbl_surat_masuk</code> adalah tabel permohonan cuti. Kuota cuti tahunan secara bisnis dihitung dari permohonan di tabel ini, tetapi hanya setelah dikaitkan ke status approval di <code>tbl_acc</code>. <code>tbl_cuti_quota</code> bukan sumber transaksi utama; ia adalah materialized snapshot/cache per user per tahun, sedangkan histori yang dapat direplay berada di <code>tbl_surat_masuk</code> + <code>tbl_acc</code>.</div>
+<p>Engine terbaru tidak sekadar menjumlahkan semua permohonan. Ia:</p><ol><li>memilih hanya <strong>Cuti Tahunan</strong>;</li><li>memilih hanya approval final: <code>acc = Diterima</code>, <code>acc_atasan = Diterima</code>, dan <code>acc_atasan2 = Diterima</code>;</li><li>mengelompokkan lama cuti berdasarkan tahun <code>YEAR(tgl_mulai)</code>;</li><li>mengurangi kuota dengan urutan N → N-1 → N-2;</li><li>membatasi carry-over N-1 dan N-2 maksimal 6 hari;</li><li>menghanguskan sisa N-2 ketika bucket N-2 tersentuh dalam penggunaan;</li><li>mengurangi lagi permohonan yang masih proses sebagai reserved saat memeriksa ketersediaan.</li></ol>
+
+<h2>2. Data aktual yang diperiksa</h2>
+<table><tr><th>Objek</th><th>Temuan</th></tr>
+<tr><td><code>tbl_surat_masuk</code></td><td>7.926 baris, auto increment terakhir 7.940. Berisi identitas pemohon, jenis cuti, lama, satuan, tanggal, alasan, alamat, pejabat approval, lampiran, tanggal dibuat, dan user.</td></tr>
+<tr><td>Cuti Tahunan</td><td>5.232 baris termasuk 11 baris satuan Tahun; total lama tercatat 12.887 unit pada seluruh tahun 2019–2026. Mayoritas satuan Hari. Ditemukan 8 baris dengan lama_cuti &lt;= 0 (termasuk -1).</td></tr>
+<tr><td><code>tbl_acc</code></td><td>Status utama: Diterima 7.167, Dibatalkan 411, Ditolak 327. Untuk Cuti Tahunan: 3.509 final tiga tingkat, 905 baru approval utama, 218 sampai atasan 1, sisanya ditolak/dibatalkan/inkonsisten.</td></tr>
+<tr><td>Periode Cuti Tahunan</td><td>Data tgl_mulai 2019–2026. Tahun 2026 memiliki 1.059 permohonan, total 2.609 hari/unit pada seluruh status.</td></tr>
+<tr><td><code>tbl_cuti_quota</code></td><td>Snapshot per user per tahun, unique <code>(id_user,tahun)</code>, default 12, carry-over N-1/N-2, used/remaining, eligibility, TMT, dan flag manual.</td></tr>
+<tr><td><code>tbl_cuti_quota_log</code></td><td>Audit mutasi snapshot: DEDUCT, ROLLOVER, SK_PRESIDEN_APPLIED, ADMIN_OVERRIDE, CUTI_BESAR, INIT.</td></tr></table>
+
+<h2>3. Struktur sumber</h2>
+<h3>3.1 tbl_surat_masuk sebagai aggregate permohonan</h3>
+<table><tr><th>Kelompok</th><th>Kolom legacy</th><th>Makna target</th></tr>
+<tr><td>Identitas snapshot</td><td><code>id_surat,nama,nip,gol,jabatan,unit_kerja,masa_kerja,id_user</code></td><td>request menyimpan snapshot saat diajukan dan relasi ke user.</td></tr>
+<tr><td>Jenis dan durasi</td><td><code>jenis_cuti,lama_cuti,satuan,alasan</code></td><td>inti perhitungan kuota.</td></tr>
+<tr><td>Periode</td><td><code>tgl_mulai,tgl_selesai,tgl_dibuat</code></td><td>tahun transaksi berasal dari <code>tgl_mulai</code>, bukan tanggal approval atau tahun saat ini.</td></tr>
+<tr><td>Kontak</td><td><code>alamat,telepon</code></td><td>alamat selama cuti dan nomor kontak.</td></tr>
+<tr><td>Pejabat</td><td><code>jab_atasan,atasan,nip_atasan,jab_atasan2,atasan2,nip_atasan2</code></td><td>snapshot jalur approval yang dipilih pemohon.</td></tr>
+<tr><td>File</td><td><code>file</code></td><td>lampiran permohonan; harus masuk MinIO dan memiliki document link.</td></tr></table>
+<h3>3.2 Status dan approval</h3>
+<p><code>tbl_acc</code> menyimpan snapshot approval saat ini, bukan riwayat. Kolom penting: <code>acc</code>, <code>acc_atasan</code>, <code>acc_atasan2</code>, alasan penolakan, snapshot kuota <code>tahunan_n/tahunan_n1/tahunan_n2</code> dan breakdown jenis cuti lain.</p>
+<table><tr><th>Status</th><th>Masuk kuota resmi?</th><th>Makna</th></tr>
+<tr><td>Final: tiga kolom = Diterima</td><td>Ya</td><td>Transaksi resmi. <code>lama_cuti</code> dikonsumsi dari pool kuota.</td></tr>
+<tr><td><code>acc=Diterima</code>, atasan belum final</td><td>Tidak, tetapi reserved</td><td>Masih proses; mengurangi available balance agar user tidak mengajukan melebihi kuota.</td></tr>
+<tr><td>Belum ada <code>tbl_acc</code></td><td>Tidak, tetapi reserved</td><td>Permohonan baru yang belum diperiksa juga dicadangkan.</td></tr>
+<tr><td>Ditolak atau salah satu approval ditolak</td><td>Tidak</td><td>Tidak memakai kuota.</td></tr>
+<tr><td>Dibatalkan</td><td>Tidak</td><td>Tidak memakai kuota.</td></tr></table>
+
+<h2>4. Alur bisnis lengkap</h2>
+<h3>4.1 Membuat permohonan</h3><ol><li>Form mewajibkan identitas, jenis, durasi, tanggal, alasan, alamat, telepon, dan pejabat.</li><li>Jenis cuti divalidasi menurut NIP: PPPK hanya Tahunan, Sakit, Melahirkan; PNS juga boleh Alasan Penting, Besar, dan Di Luar Tanggungan Negara.</li><li>Periode tutup Cuti Tahunan diperiksa. Source saat ini hard-code 21 November 2025–31 Desember 2025 dan hanya memblokir jika tanggal request overlap.</li><li>File boleh jpg/png/jpeg/doc/docx/pdf dengan batas legacy kurang dari 2 MB; nama file diberi angka random, lalu disimpan di <code>upload/surat_masuk/</code>.</li><li>Untuk Cuti Tahunan, <code>validateQuotaAvailability</code> menjalankan eligibility dan available balance sebelum INSERT.</li><li>INSERT ke <code>tbl_surat_masuk</code>. Belum ada mutation kuota pada saat pengajuan.</li></ol>
+<h3>4.2 Persetujuan</h3><ol><li>Approval utama admin mengisi atau memperbarui <code>tbl_acc.acc</code>.</li><li>Atasan 1 dan atasan 2 memperbarui <code>acc_atasan</code> dan <code>acc_atasan2</code>.</li><li>Status resmi untuk quota engine baru ketika ketiganya Diterima.</li><li>Snapshot quota di <code>tbl_acc.tahunan_n...</code> dipakai tampilan/fallback lama, tetapi engine terbaru menghitung ulang dari histori permohonan final.</li><li>Source code mengandung fungsi mutasi <code>deductQuota</code>, tetapi alur approval yang diperiksa tidak menunjukkan pemanggilan konsisten; karena itu target tidak boleh bergantung pada mutasi event saja. Saldo resmi harus dapat direbuild deterministik dari <code>leave_requests</code>.</li></ol>
+<h3>4.3 Menampilkan saldo</h3><p><code>calculateSisaCutiFromAccHistory</code> → <code>calculateOriginYearQuota</code> → query semua request Cuti Tahunan final → replay per tahun → map menjadi N/N-1/N-2. Tampilan histori memakai replay snapshot berdasarkan tanggal mulai lalu id surat.</p>
+<h3>4.4 Mengecek ketersediaan</h3><p><code>calculateAvailableBalance</code> mengambil official balance lalu mengurangi reserved days dengan cascade N → N-1 → N-2. N-1/N-2 masing-masing dibatasi maksimal 6 pada output UI. Kalau lama request ≤ available, request valid.</p>
+
+<h2>5. Algoritma kuota yang harus dipertahankan</h2>
+<pre>Input: user, targetYear, optional requestToExclude
+
+1. Ambil NIP user.
+2. Resolve TMT:
+   - PNS: YYYYMM dari digit NIP posisi 9–14.
+   - PPPK: lookup tbl_pppk_tmt; jika tidak ada, manual validation.
+3. Eligible jika masa kerja >= 12 bulan pada tanggal referensi.
+4. Ambil request JOIN approval:
+   WHERE jenis_cuti = 'Cuti Tahunan'
+     AND user = user
+     AND approval utama/atasan1/atasan2 semuanya 'Diterima'
+     AND optional id_surat != requestToExclude
+   GROUP BY YEAR(tgl_mulai), SUM(lama_cuti).
+5. Buat origin quota 12 hari untuk setiap tahun eligible.
+6. Replay tahun naik:
+   penggunaan tahun Y mengurangi quota Y, lalu Y-1, lalu Y-2.
+   Jika bucket Y-2 disentuh, sisa bucket itu menjadi 0.
+7. UI:
+   N = remaining[targetYear]
+   N-1 = min(6, remaining[targetYear-1])
+   N-2 = 0 jika ada penggunaan pada tahun target-2, selain itu min(6, remaining[targetYear-2]).
+8. Reserved:
+   request Cuti Tahunan pada target year tanpa approval final,
+   dengan approval utama belum ada atau masih berjalan dan tidak ditolak.
+9. Available = official pool - reserved, cascade N → N-1 → N-2.</pre>
+<div class="warn"><strong>Catatan penting:</strong> terdapat beberapa implementasi lama yang tidak sepenuhnya sama: <code>getOrCreateQuota</code>/<code>recalculateQuotaFromHistory</code> memakai snapshot dan kadang hanya mengurangi N; <code>cuti_quota_advanced.php</code> memakai rollover materialized; engine origin-year adalah sumber perilaku terbaru. Saat refactor, tetapkan satu engine canonical dan buat parity test terhadap engine terbaru.</div>
+
+<h2>6. Logic tambahan yang wajib terbaca</h2>
+<table><tr><th>Logic</th><th>Perilaku sumber</th><th>Target</th></tr>
+<tr><td>Eligibility</td><td>12 bulan; TMT PNS dari NIP, PPPK dari <code>tbl_pppk_tmt</code>; missing TMT = manual.</td><td>Service murni + query TMT, tanggal referensi eksplisit.</td></tr>
+<tr><td>PPPK</td><td>Jenis cuti dibatasi; parsing kode NIP dapat memperlakukan bulan 21 sebagai kode khusus.</td><td>Preserve dulu, dokumentasikan kasus edge dan test.</td></tr>
+<tr><td>Rollover</td><td>Sisa N→N-1 max 6, N-1→N-2 max 6, N-2 hilang.</td><td>Jangan jadikan cron sebagai sumber kebenaran; engine replay tetap authoritative.</td></tr>
+<tr><td>SK Presiden</td><td>Update kuota N global dan semua snapshot user; sisa ditambah selisih tanpa reset used.</td><td>Perlu transaction + audit + idempotency key tahun.</td></tr>
+<tr><td>Cuti Besar</td><td>Mengosongkan sisa N dan mencatat log.</td><td>Diputuskan sebagai policy transaction khusus, bukan Cuti Tahunan.</td></tr>
+<tr><td>Override admin</td><td>Set eligible/manual_validation dan log alasan.</td><td>Audit wajib, tidak boleh mengubah histori request.</td></tr>
+<tr><td>Periode tutup</td><td>Konfigurasi hard-code dan tanggal sistem Asia/Jakarta.</td><td>Table/config periode; server-side guard wajib.</td></tr>
+<tr><td>File</td><td>Random filename, filesystem, size &lt; 2 MB, ekstensi saja.</td><td>MinIO object key deterministic, MIME/size validation, legacy fallback saat migrasi.</td></tr></table>
+
+<h2>7. Temuan risiko dan bug migrasi</h2><ul><li><strong>Dead function:</strong> <code>recalculateQuotaFromHistory()</code> di <code>include/cuti_quota_advanced.php</code> memakai <code>tbl_acc_atasan1</code> dan <code>tbl_acc_atasan2</code>. Kedua tabel itu tidak ada di database (hanya tercatat <code>tbl_acc</code>), jadi fungsi tersebut pasti gagal query dan tidak boleh disalin apa adanya.</li><li><strong>Approval snapshot tidak historis:</strong> perubahan status lama dapat mengubah hasil replay. Jika histori audit diperlukan, tambahkan approval events; jika tidak, nyatakan bahwa target mempertahankan current-state semantics.</li><li><strong>Duplikasi transaksi:</strong> terverifikasi 6 <code>id_surat</code> memiliki lebih dari satu baris di <code>tbl_acc</code>, dan 4 baris <code>tbl_acc</code> orphan tanpa request. Engine target harus deduplicate per request id dan melaporkan konflik, bukan men-jumlahkan keduanya.</li><li><strong>Request belum diperiksa:</strong> 31 request tidak punya baris <code>tbl_acc</code> sama sekali; ini masuk kategori reserved.</li><li><strong>Satuan tidak konsisten:</strong> Cuti Tahunan memiliki satuan Hari dan Tahun; quota engine menjumlahkan integer <code>lama_cuti</code>. Target perlu menolak/menormalisasi unit selain Hari atau membuat policy eksplisit.</li><li><strong>Nilai negatif/nol:</strong> terverifikasi 8 baris Cuti Tahunan dengan <code>lama_cuti &lt;= 0</code> (termasuk -1), 5 Cuti Sakit, 1 Cuti Alasan Penting. Validasi target tidak boleh langsung menganggap semua histori valid; tandai data anomali.</li><li><strong>User non-aktif:</strong> dari 1.730 user, 414 berstatus Non Aktif, 1.176 nilai kosong, 140 NULL. Filter keaktifan rollover legacy memakai tiga kondisi yang tidak identik; tetapkan satu definisi aktif di target.</li><li><strong>Log audit tidak lengkap:</strong> <code>tbl_cuti_quota_log</code> hanya berisi 259 baris dengan satu action DEDUCT, padahal kode mendefinisikan ROLLOVER, SK_PRESIDEN_APPLIED, ADMIN_OVERRIDE, CUTI_BESAR, dan INIT. Artinya rollover dan SK Presiden belum pernah tercatat berjalan lewat jalur itu.</li><li><strong>Projection tidak update:</strong> <code>tbl_cuti_quota</code> hanya memiliki 202 baris per tahun 2020–2025 dan 242 baris 2026, padahal user aktif jauh lebih banyak. Projection legacy memang tidak sinkron dengan seluruh user, sehingga tidak layak dipercaya sebagai sumber saldo.</li><li><strong>Hard-code periode tutup:</strong> periode 21 Nov–31 Des 2025 tertulis di <code>include/cuti_tahunan_tutup.php</code>; tidak boleh disalin sebagai aturan permanen.</li><li><strong>Race condition:</strong> dua pengajuan bersamaan bisa sama-sama lolos available check. Target perlu transaction/lock atau reservation atomik.</li><li><strong>Perbedaan fungsi:</strong> materialized quota (<code>getOrCreateQuota</code>, rollover advanced) dan origin replay dapat menghasilkan saldo berbeda. Hanya satu canonical engine boleh dipakai endpoint baru.</li></ul>
+
+<h2>8. Mapping target sederhana</h2>
+<table><tr><th>Legacy</th><th>Target</th></tr><tr><td><code>tbl_surat_masuk</code></td><td><code>leave_requests</code>; approval status dan snapshot approval dilipat ke row request sesuai keputusan simplifikasi.</td></tr><tr><td><code>tbl_acc</code></td><td>Kolom approval pada <code>leave_requests</code>; jika butuh audit historis, kelak <code>audit_logs</code> event, bukan tabel 1:1 wajib.</td></tr><tr><td><code>tbl_cuti_quota</code></td><td><code>leave_quotas</code> sebagai cache/rebuildable projection, unique user+year.</td></tr><tr><td><code>tbl_cuti_settings</code></td><td><code>leave_policies</code> per tahun.</td></tr><tr><td><code>tbl_cuti_quota_log</code></td><td><code>leave_quota_audits</code> atau audit_logs dengan action dan before/after JSON.</td></tr><tr><td><code>tbl_pppk_tmt</code></td><td><code>employment_dates</code> atau field TMT pada user + source record.</td></tr><tr><td><code>tbl_surat_masuk.file</code></td><td><code>documents</code> + <code>document_links</code>, object key MinIO.</td></tr></table>
+
+<h2>9. Acceptance criteria refactor</h2><ol><li>Untuk dataset legacy yang sama, official balance per user/tahun sama dengan engine origin-year, termasuk exclude current request.</li><li>Reserved tidak mengurangi official balance dan hanya memengaruhi available balance.</li><li>Request non-Tahunan tidak memengaruhi quota Tahunan.</li><li>Approval kurang satu tingkat tidak dihitung resmi.</li><li>Ditolak/dibatalkan tidak dihitung resmi maupun reserved.</li><li>Carry-over dan N-2 expiry memiliki test boundary.</li><li>Concurrent submission tidak dapat oversubscribe quota.</li><li>Rebuild quota dapat dijalankan berulang dan hasilnya sama.</li><li>Semua lampiran request bermigrasi ke MinIO atau tercatat missing/orphan.</li></ol>
+
+<h2>10. Sumber yang dibaca</h2><p><code>include/cuti_quota_functions.php</code> (1.059 baris), <code>include/cuti_quota_advanced.php</code>, <code>include/cuti_tahunan_tutup.php</code>, <code>tambah_surat_masuk.php</code>, <code>edit_surat_masuk.php</code>, <code>tambah_acc.php</code>, <code>edit_acc.php</code>, <code>acc.php</code>, <code>admin_kuota_user.php</code>, <code>admin_cuti_settings.php</code>, <code>transaksi_surat_masuk.php</code>, migration scripts quota, dan data/schema MySQL.</p>
+<p class="small">Report ini menjadi bagian dari plan utama: <code>docs/sedakep-plan.md</code> (section 3 dan Fase 4-8).</p>
+</main></body></html>

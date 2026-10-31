@@ -48,3 +48,39 @@ export const decisionLabel = (value: string): string => labelStatus[value] ?? va
 
 export const totalDays = (bucket: { n: number; n1: number; n2: number }): number =>
   bucket.n + bucket.n1 + bucket.n2;
+
+const durationUnitLabels: Record<string, string> = {
+  day: 'hari',
+  month: 'bulan',
+  year: 'tahun',
+};
+
+export const durationUnitLabel = (unit: string | null | undefined): string =>
+  unit ? durationUnitLabels[unit] ?? unit : '-';
+
+const gradeLabels: Record<string, string> = {
+  'IV/e': 'Pembina Utama, IV/e',
+  'IV/d': 'Pembina Utama Madya, IV/d',
+  'IV/c': 'Pembina Utama Muda, IV/c',
+  'IV/b': 'Pembina Tk. I, IV/b',
+  'IV/a': 'Pembina, IV/a',
+  'III/d': 'Penata Tk. I, III/d',
+  'III/c': 'Penata, III/c',
+  'III/b': 'Penata Muda Tk. I, III/b',
+  'III/a': 'Penata Muda, III/a',
+  'II/d': 'Pengatur Tk. I, II/d',
+  'II/c': 'Pengatur, II/c',
+  'II/b': 'Pengatur Muda Tk. I, II/b',
+  'II/a': 'Pengatur Muda, II/a',
+  'I/d': 'Juru Tk. I, I/d',
+  'I/c': 'Juru, I/c',
+  'I/b': 'Juru Muda Tk. I, I/b',
+  'I/a': 'Juru Muda, I/a',
+  IX: 'Ahli Pertama, IX',
+  X: 'Ahli Muda, X',
+  XI: 'Ahli Madya, XI',
+  VII: 'Terampil, VII',
+};
+
+export const gradeLabel = (grade: string | null | undefined): string =>
+  grade ? (gradeLabels[grade] ?? grade) : '-';

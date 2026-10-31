@@ -5,7 +5,9 @@ import { readFileSync } from 'node:fs';
 const read = (rel: string) =>
   readFileSync(new URL(`../api/modules/user/${rel}`, import.meta.url), 'utf8');
 
-const SQL_PATTERN = /\b(SELECT|INSERT|UPDATE|DELETE|CREATE TABLE|PRAGMA)\b/i;
+//  cocok setelah ':' atau '-', jadi pola ini sengaja case-sensitive:
+// SQL ditulis HURUF BESAR, sedangkan kata Indonesia ('update', 'hapus') tidak.
+const SQL_PATTERN = /\b(SELECT|INSERT|UPDATE|DELETE|CREATE TABLE|PRAGMA)\b/;
 
 describe('batas modul user', () => {
   it('service tidak berisi SQL mentah', () => {
@@ -20,13 +22,13 @@ describe('batas modul user', () => {
 
   it('command hanya berisi operasi tulis', () => {
     const command = read('command/index.ts');
-    expect(command).not.toMatch(/\bSELECT\b/i);
+    expect(command).not.toMatch(/\bSELECT\b/);
     expect(command).toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
   });
 
   it('query hanya berisi operasi baca', () => {
     const query = read('query/index.ts');
-    expect(query).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
+    expect(query).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/);
     expect(query).toMatch(/\bSELECT\b/i);
   });
 });

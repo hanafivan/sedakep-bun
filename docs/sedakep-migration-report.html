@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sedakep — Audit, ERD, dan Rencana Migrasi</title>
+<style>
+:root{color-scheme:dark;--bg:#0f172a;--panel:#111c33;--muted:#9fb0ca;--text:#e8eef8;--line:#293a59;--blue:#65b7ff;--green:#5be0ac;--yellow:#ffd166;--red:#ff7d91}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#0b1220,#14223c);color:var(--text);font:15px/1.65 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}main{max-width:1320px;margin:auto;padding:42px 24px 80px}h1{font-size:38px;line-height:1.15;margin:0 0 8px}h2{margin-top:42px;color:var(--blue);border-bottom:1px solid var(--line);padding-bottom:8px}h3{color:var(--green);margin-bottom:5px}.lead{font-size:18px;color:var(--muted);max-width:850px}.meta{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0}.pill{padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:#172541;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}.card{background:rgba(17,28,51,.9);border:1px solid var(--line);border-radius:12px;padding:17px}.big{font-size:30px;color:var(--blue);font-weight:700}.muted{color:var(--muted)}table{width:100%;border-collapse:collapse;background:rgba(17,28,51,.8);border-radius:10px;overflow:hidden}th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--blue);background:#172541}code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}code{color:#ffd89b}pre{overflow:auto;background:#0a1120;border:1px solid var(--line);padding:16px;border-radius:10px;color:#d5e4ff}.notice{border-left:4px solid var(--yellow);padding:12px 16px;background:#332a16;border-radius:4px}.ok{border-left-color:var(--green);background:#123126}.warn{border-left-color:var(--red);background:#351b25}.erd{overflow:auto;background:#0a1120;border:1px solid var(--line);padding:20px;border-radius:10px}.erd svg{min-width:950px;width:100%;height:auto}.small{font-size:13px}.two{columns:2;column-gap:35px}@media(max-width:760px){main{padding:25px 14px}.two{columns:1}h1{font-size:30px}}
+</style>
+</head>
+<body><main>
+<header>
+<h1>Sedakep → TypeScript + Hono</h1>
+<p class="lead">Report audit awal codebase legacy, pemetaan database/ERD, desain adapter MySQL dan MinIO, serta strategi migrasi data dan dokumen yang dapat dilanjutkan tanpa duplikasi.</p>
+<div class="meta"><span class="pill">Dibuat: 7 Oktober 2026</span><span class="pill">Source: sedakep-ptsp-kemenag-sleman</span><span class="pill">Target: codebase-hono</span></div>
+</header>
+<section><h2>1. Ringkasan eksekutif</h2><div class="grid">
+<div class="card"><div class="big">382</div><div>file PHP aplikasi yang dihitung<br><span class="muted">Tidak termasuk library vendor besar dan worktree Claude</span></div></div>
+<div class="card"><div class="big">105.822</div><div>baris PHP terhitung<br><span class="muted">Kode aplikasi + modul</span></div></div>
+<div class="card"><div class="big">58</div><div>tabel/view database legacy<br><span class="muted">855 kolom</span></div></div>
+<div class="card"><div class="big">6</div><div>foreign key resmi<br><span class="muted">Relasi kode aplikasi jauh lebih banyak</span></div></div>
+<div class="card"><div class="big">300+ MB</div><div>file upload utama terpetakan<br><span class="muted">PDF, gambar, dokumen, dan foto</span></div></div>
+</div></section>
+<section><h2>2. Temuan penting</h2><div class="notice warn"><b>Database legacy sangat bergantung pada relasi implisit.</b> Hanya enam foreign key tercatat di MySQL, sedangkan dari pola primary key/kolom ID terdeteksi sekitar 86 relasi kandidat. Migrasi wajib memakai mapping eksplisit dan validasi record, bukan hanya mengandalkan FK.</div>
+<div class="notice ok"><b>Keputusan simplifikasi schema:</b> approval terkini yang 1:1 dilipat ke tabel request/service. Tabel approval terpisah tidak dibuat kecuali nanti terbukti membutuhkan riwayat approval 1:N.</div>
+<div class="notice ok"><b>Strategi penyimpanan dokumen:</b> file baru ditulis langsung ke MinIO. File lama dipindahkan memakai object key deterministik, checksum, dan status migrasi sehingga proses bisa dihentikan lalu dilanjutkan.</div>
+<ul><li>Password lama masih MD5 pada login legacy; migrasi auth harus mendukung upgrade hash setelah login berhasil.</li><li>Nama file database sering hanya filename, sementara lokasi folder ditentukan kode PHP. Scanner migrasi harus memakai pasangan tabel/kolom + mapping direktori.</li><li>File tidak hanya PDF: ada JPG/JPEG, PNG, DOC/DOCX, logo, dan foto.</li><li>Filesystem legacy jangan dihapus sebelum audit checksum dan periode fallback selesai.</li></ul></section>
+<section><h2>3. Pemetaan modul</h2><table><thead><tr><th>Modul</th><th>Folder/indikasi source</th><th>Tabel utama</th><th>Catatan</th></tr></thead><tbody>
+<tr><td>Auth & admin</td><td><code>index.php</code>, <code>admin.php</code>, <code>user.php</code></td><td><code>tbl_user</code>, <code>tbl_admin</code>, <code>tbl_instansi</code></td><td>Session PHP, role admin, password MD5</td></tr>
+<tr><td>Cuti & kuota</td><td><code>belum_*.php</code>, <code>cuti_jadi.php</code></td><td><code>tbl_surat_masuk</code>, <code>tbl_acc</code>, <code>tbl_cuti_*</code></td><td>Quota/settings/log dan approval</td></tr>
+<tr><td>Disposisi</td><td><code>disposisi/</code></td><td><code>hlm_edispo*</code></td><td>Surat, klasifikasi, disposisi, final, approval</td></tr>
+<tr><td>Surat tugas</td><td><code>surattugas/</code></td><td><code>hlm_surtug*</code></td><td>Pegawai, keterangan, tembusan, approval, SK</td></tr>
+<tr><td>Alibi & agenda</td><td><code>alibi/</code>, <code>agenda/</code></td><td><code>hlm_alibi*</code>, <code>hlm_agenda</code></td><td>Alibi memiliki approval dan file</td></tr>
+<tr><td>Layanan kepegawaian</td><td><code>pensiun/</code>, <code>ijinbelajar/</code>, <code>tugasbelajar/</code>, <code>gelar/</code></td><td><code>hlm_pens_*</code>, <code>hlm_ibel*</code>, <code>tugas_belajar*</code>, <code>hlm_gelar*</code></td><td>Workflow usul dan approval</td></tr>
+<tr><td>Kartu</td><td><code>bpjs/</code>, <code>taspen/</code>, <code>karpeg/</code>, <code>kariskarsu/</code>, <code>satyalencana/</code></td><td><code>hlm_bpjs*</code>, <code>hlm_taspen*</code>, <code>hlm_karpeg*</code>, <code>hlm_karisu*</code>, <code>hlm_satlen*</code></td><td>Mayoritas punya tabel approval</td></tr>
+<tr><td>Pangkat/PMK/SKMI</td><td><code>pangkat/</code>, <code>pmk/</code>, <code>skmi_skpp/</code></td><td><code>hlm_pangkat*</code>, <code>tbl_pmk*</code>, <code>tbl_skmi_skpp*</code></td><td>Relasi dokumen dan approval</td></tr>
+</tbody></table></section>
+<section><h2>4. ERD database legacy</h2><p class="muted">Diagram berikut dibuat dari 59 tabel/view, 855 kolom, enam FK resmi, dan 86 relasi kandidat yang diinferensikan dari kolom ID. Garis kuning putus-putus adalah relasi inferred dan wajib dikonfirmasi saat mapping target.</p><div class="erd"><svg viewBox="0 0 4190 1472" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace">
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#ffd166"/></marker></defs>
+<path d="M172,166 C172,240 1552,240 1552,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M1552,70 C1552,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M1552,166 C1552,179 1552,179 1552,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 1552,179 1552,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3622,70 C3622,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3622,166 C3622,179 3622,179 3622,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 3622,179 3622,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M862,70 C862,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,166 C518,179 862,179 862,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 862,179 862,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,166 C518,240 862,240 862,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,240 862,240 862,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,166 C518,301 862,301 862,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,301 862,301 862,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,362 862,362 862,558" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M2932,70 C2932,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M2932,166 C2932,179 2932,179 2932,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 2932,179 2932,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M2242,70 C2242,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M2242,166 C2242,179 2242,179 2242,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 2242,179 2242,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M2242,166 C2242,240 2242,240 2242,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,240 2242,240 2242,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,484 3622,484 3622,802" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3622,898 C3622,911 3622,911 3622,924" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,545 3622,545 3622,924" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,362 3622,362 3622,558" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3622,654 C3622,667 3622,667 3622,680" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,423 3622,423 3622,680" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3278,70 C3278,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3278,166 C3278,179 3278,179 3278,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 3278,179 3278,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3278,166 C3278,240 3278,240 3278,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,240 3278,240 3278,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3278,166 C3278,301 3278,301 3278,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,301 3278,301 3278,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3278,166 C3278,362 3278,362 3278,558" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,362 3278,362 3278,558" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M1898,166 C1898,240 1898,240 1898,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,240 1898,240 1898,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M1898,166 C1898,179 1898,179 1898,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 1898,179 1898,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M1898,70 C1898,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,606 3622,606 3622,1046" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3622,1142 C3622,1155 3622,1155 3622,1168" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,667 3622,667 3622,1168" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3622,1142 C3622,1216 3622,1216 3622,1290" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,728 3622,728 3622,1290" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M1208,70 C1208,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M1208,166 C1208,179 1208,179 1208,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 1208,179 1208,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M1208,166 C1208,240 1208,240 1208,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,240 1208,240 1208,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M1208,166 C1208,301 1208,301 1208,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,301 1208,301 1208,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M1208,166 C1208,362 1208,362 1208,558" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,362 1208,362 1208,558" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,240 3622,240 3622,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3622,410 C3622,423 3622,423 3622,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,301 3622,301 3622,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,166 C518,179 518,179 518,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 518,179 518,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,362 518,362 518,558" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,654 C518,667 518,667 518,680" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,423 518,423 518,680" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,166 C518,423 518,423 518,680" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,240 172,240 172,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,532 C172,545 172,545 172,558" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3968,70 C3968,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3968,166 C3968,179 3968,179 3968,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 3968,179 3968,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,423 172,423 172,680" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,240 3968,240 3968,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M3968,410 C3968,423 3968,423 3968,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,301 3968,301 3968,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,314 C518,606 172,606 172,898" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,166 C518,240 518,240 518,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,240 518,240 518,314" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,166 C518,301 518,301 518,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,301 518,301 518,436" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,70 C518,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M2588,70 C2588,118 172,118 172,166" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M2588,166 C2588,179 2588,179 2588,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,179 2588,179 2588,192" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M518,654 C518,728 518,728 518,802" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<path d="M172,166 C172,484 518,484 518,802" fill="none" stroke="#ffd166" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" marker-end="url(#a)"/>
+<text x="30" y="42" fill="#5be0ac" font-size="13" font-weight="bold">MASTER / AUTH</text>
+<line x1="30" y1="50" x2="315" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="375" y="42" fill="#5be0ac" font-size="13" font-weight="bold">SURAT & CUTI</text>
+<line x1="375" y1="50" x2="660" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="720" y="42" fill="#5be0ac" font-size="13" font-weight="bold">DISPOSISI</text>
+<line x1="720" y1="50" x2="1005" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="1065" y="42" fill="#5be0ac" font-size="13" font-weight="bold">SURAT TUGAS</text>
+<line x1="1065" y1="50" x2="1350" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="1410" y="42" fill="#5be0ac" font-size="13" font-weight="bold">ALIBI & AGENDA</text>
+<line x1="1410" y1="50" x2="1695" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="1755" y="42" fill="#5be0ac" font-size="13" font-weight="bold">PENSIUN</text>
+<line x1="1755" y1="50" x2="2040" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="2100" y="42" fill="#5be0ac" font-size="13" font-weight="bold">IJIN BELAJAR</text>
+<line x1="2100" y1="50" x2="2385" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="2445" y="42" fill="#5be0ac" font-size="13" font-weight="bold">TUGAS BELAJAR</text>
+<line x1="2445" y1="50" x2="2730" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="2790" y="42" fill="#5be0ac" font-size="13" font-weight="bold">GELAR</text>
+<line x1="2790" y1="50" x2="3075" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="3135" y="42" fill="#5be0ac" font-size="13" font-weight="bold">PANGKAT</text>
+<line x1="3135" y1="50" x2="3420" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="3480" y="42" fill="#5be0ac" font-size="13" font-weight="bold">KARTU KEPEGAWAIAN</text>
+<line x1="3480" y1="50" x2="3765" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<text x="3825" y="42" fill="#5be0ac" font-size="13" font-weight="bold">PMK & SKMI/SKPP</text>
+<line x1="3825" y1="50" x2="4110" y2="50" stroke="#5be0ac" stroke-width="1" opacity="0.5"/>
+<rect x="30" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="42" y="91" fill="#65b7ff" font-size="13" font-weight="bold">tbl_user</text>
+<text x="303" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">1710 row</text>
+<text x="42" y="109" fill="#dce8fa" font-size="10.5">PK: id_user</text>
+<text x="42" y="125" fill="#ffd166" font-size="10.5">REF: -</text>
+<text x="42" y="141" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="42" y="157" fill="#9fb0ca" font-size="10">11 kolom</text>
+<rect x="30" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="42" y="213" fill="#65b7ff" font-size="13" font-weight="bold">tbl_admin</text>
+<text x="303" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">0 row</text>
+<text x="42" y="231" fill="#dce8fa" font-size="10.5">PK: id_admin</text>
+<text x="42" y="247" fill="#ffd166" font-size="10.5">REF: -</text>
+<text x="42" y="263" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="42" y="279" fill="#9fb0ca" font-size="10">6 kolom</text>
+<rect x="30" y="314" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="42" y="335" fill="#65b7ff" font-size="13" font-weight="bold">tbl_instansi</text>
+<text x="303" y="335" fill="#9fb0ca" font-size="10" text-anchor="end">1 row</text>
+<text x="42" y="353" fill="#dce8fa" font-size="10.5">PK: id_instansi</text>
+<text x="42" y="369" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="42" y="385" fill="#5be0ac" font-size="10.5">FILE: logo</text>
+<text x="42" y="401" fill="#9fb0ca" font-size="10">11 kolom</text>
+<rect x="30" y="436" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="42" y="457" fill="#65b7ff" font-size="13" font-weight="bold">tbl_dept</text>
+<text x="303" y="457" fill="#9fb0ca" font-size="10" text-anchor="end">43 row</text>
+<text x="42" y="475" fill="#dce8fa" font-size="10.5">PK: dept_id</text>
+<text x="42" y="491" fill="#ffd166" font-size="10.5">REF: -</text>
+<text x="42" y="507" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="42" y="523" fill="#9fb0ca" font-size="10">3 kolom</text>
+<rect x="30" y="558" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="42" y="579" fill="#65b7ff" font-size="13" font-weight="bold">tbl_jabatan</text>
+<text x="303" y="579" fill="#9fb0ca" font-size="10" text-anchor="end">174 row</text>
+<text x="42" y="597" fill="#dce8fa" font-size="10.5">PK: jabatan_id</text>
+<text x="42" y="613" fill="#ffd166" font-size="10.5">REF: dept_id</text>
+<text x="42" y="629" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="42" y="645" fill="#9fb0ca" font-size="10">3 kolom</text>
+<rect x="30" y="680" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="42" y="701" fill="#65b7ff" font-size="13" font-weight="bold">tbl_sett</text>
+<text x="303" y="701" fill="#9fb0ca" font-size="10" text-anchor="end">1 row</text>
+<text x="42" y="719" fill="#dce8fa" font-size="10.5">PK: id_sett</text>
+<text x="42" y="735" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="42" y="751" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="42" y="767" fill="#9fb0ca" font-size="10">5 kolom</text>
+<rect x="30" y="802" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="42" y="823" fill="#65b7ff" font-size="13" font-weight="bold">tbl_n2019</text>
+<text x="303" y="823" fill="#9fb0ca" font-size="10" text-anchor="end">467 row</text>
+<text x="42" y="841" fill="#dce8fa" font-size="10.5">PK: nomor</text>
+<text x="42" y="857" fill="#ffd166" font-size="10.5">REF: -</text>
+<text x="42" y="873" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="42" y="889" fill="#9fb0ca" font-size="10">9 kolom</text>
+<rect x="30" y="924" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="42" y="945" fill="#65b7ff" font-size="13" font-weight="bold">tbl_pppk_tmt</text>
+<text x="303" y="945" fill="#9fb0ca" font-size="10" text-anchor="end">159 row</text>
+<text x="42" y="963" fill="#dce8fa" font-size="10.5">PK: id_pppk_tmt</text>
+<text x="42" y="979" fill="#ffd166" font-size="10.5">REF: -</text>
+<text x="42" y="995" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="42" y="1011" fill="#9fb0ca" font-size="10">7 kolom</text>
+<rect x="30" y="1046" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="42" y="1067" fill="#65b7ff" font-size="13" font-weight="bold">tbl_cuti_settings</text>
+<text x="303" y="1067" fill="#9fb0ca" font-size="10" text-anchor="end">7 row</text>
+<text x="42" y="1085" fill="#dce8fa" font-size="10.5">PK: id_setting</text>
+<text x="42" y="1101" fill="#ffd166" font-size="10.5">REF: -</text>
+<text x="42" y="1117" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="42" y="1133" fill="#9fb0ca" font-size="10">9 kolom</text>
+<rect x="375" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="387" y="91" fill="#65b7ff" font-size="13" font-weight="bold">tbl_surat_masuk</text>
+<text x="648" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">7753 row</text>
+<text x="387" y="109" fill="#dce8fa" font-size="10.5">PK: id_surat</text>
+<text x="387" y="125" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="387" y="141" fill="#5be0ac" font-size="10.5">FILE: file</text>
+<text x="387" y="157" fill="#9fb0ca" font-size="10">24 kolom</text>
+<rect x="375" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="387" y="213" fill="#65b7ff" font-size="13" font-weight="bold">tbl_acc</text>
+<text x="648" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">7862 row</text>
+<text x="387" y="231" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="387" y="247" fill="#ffd166" font-size="10.5">REF: id_acc,id_surat,id_user</text>
+<text x="387" y="263" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="387" y="279" fill="#9fb0ca" font-size="10">20 kolom</text>
+<rect x="375" y="314" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="387" y="335" fill="#65b7ff" font-size="13" font-weight="bold">tbl_suket</text>
+<text x="648" y="335" fill="#9fb0ca" font-size="10" text-anchor="end">3367 row</text>
+<text x="387" y="353" fill="#dce8fa" font-size="10.5">PK: id_suket</text>
+<text x="387" y="369" fill="#ffd166" font-size="10.5">REF: nomor,id_surat,id_user</text>
+<text x="387" y="385" fill="#5be0ac" font-size="10.5">FILE: file_sk</text>
+<text x="387" y="401" fill="#9fb0ca" font-size="10">8 kolom</text>
+<rect x="375" y="436" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="387" y="457" fill="#65b7ff" font-size="13" font-weight="bold">tbl_suketmad</text>
+<text x="648" y="457" fill="#9fb0ca" font-size="10" text-anchor="end">596 row</text>
+<text x="387" y="475" fill="#dce8fa" font-size="10.5">PK: id_suketmad</text>
+<text x="387" y="491" fill="#ffd166" font-size="10.5">REF: id_surat,id_user</text>
+<text x="387" y="507" fill="#5be0ac" font-size="10.5">FILE: file_sk</text>
+<text x="387" y="523" fill="#9fb0ca" font-size="10">4 kolom</text>
+<rect x="375" y="558" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="387" y="579" fill="#65b7ff" font-size="13" font-weight="bold">tbl_cuti_quota</text>
+<text x="648" y="579" fill="#9fb0ca" font-size="10" text-anchor="end">1454 row</text>
+<text x="387" y="597" fill="#dce8fa" font-size="10.5">PK: id_quota</text>
+<text x="387" y="613" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="387" y="629" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="387" y="645" fill="#9fb0ca" font-size="10">25 kolom</text>
+<rect x="375" y="680" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="387" y="701" fill="#65b7ff" font-size="13" font-weight="bold">tbl_cuti_quota_log</text>
+<text x="648" y="701" fill="#9fb0ca" font-size="10" text-anchor="end">259 row</text>
+<text x="387" y="719" fill="#dce8fa" font-size="10.5">PK: id_log</text>
+<text x="387" y="735" fill="#ffd166" font-size="10.5">REF: id_quota,id_user,id_surat</text>
+<text x="387" y="751" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="387" y="767" fill="#9fb0ca" font-size="10">15 kolom</text>
+<rect x="375" y="802" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="387" y="823" fill="#65b7ff" font-size="13" font-weight="bold">vw_cuti_quota_summary</text>
+<text x="648" y="823" fill="#9fb0ca" font-size="10" text-anchor="end">? row</text>
+<text x="387" y="841" fill="#dce8fa" font-size="10.5">PK: -</text>
+<text x="387" y="857" fill="#ffd166" font-size="10.5">REF: id_quota,id_user</text>
+<text x="387" y="873" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="387" y="889" fill="#9fb0ca" font-size="10">25 kolom</text>
+<rect x="720" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="732" y="91" fill="#65b7ff" font-size="13" font-weight="bold">hlm_edispo</text>
+<text x="993" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">6696 row</text>
+<text x="732" y="109" fill="#dce8fa" font-size="10.5">PK: id_surat</text>
+<text x="732" y="125" fill="#ffd166" font-size="10.5">REF: id_surat,id_user</text>
+<text x="732" y="141" fill="#5be0ac" font-size="10.5">FILE: file</text>
+<text x="732" y="157" fill="#9fb0ca" font-size="10">15 kolom</text>
+<rect x="720" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="732" y="213" fill="#65b7ff" font-size="13" font-weight="bold">hlm_edispo_acc</text>
+<text x="993" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">6788 row</text>
+<text x="732" y="231" fill="#dce8fa" font-size="10.5">PK: id_dispo</text>
+<text x="732" y="247" fill="#ffd166" font-size="10.5">REF: id_surat,id_user</text>
+<text x="732" y="263" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="732" y="279" fill="#9fb0ca" font-size="10">6 kolom</text>
+<rect x="720" y="314" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="732" y="335" fill="#65b7ff" font-size="13" font-weight="bold">hlm_edispo_disposisi</text>
+<text x="993" y="335" fill="#9fb0ca" font-size="10" text-anchor="end">6776 row</text>
+<text x="732" y="353" fill="#dce8fa" font-size="10.5">PK: id_disposisi</text>
+<text x="732" y="369" fill="#ffd166" font-size="10.5">REF: id_surat,id_user</text>
+<text x="732" y="385" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="732" y="401" fill="#9fb0ca" font-size="10">7 kolom</text>
+<rect x="720" y="436" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="732" y="457" fill="#65b7ff" font-size="13" font-weight="bold">hlm_edispo_final</text>
+<text x="993" y="457" fill="#9fb0ca" font-size="10" text-anchor="end">6112 row</text>
+<text x="732" y="475" fill="#dce8fa" font-size="10.5">PK: id_final</text>
+<text x="732" y="491" fill="#ffd166" font-size="10.5">REF: id_surat,id_user</text>
+<text x="732" y="507" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="732" y="523" fill="#9fb0ca" font-size="10">6 kolom</text>
+<rect x="720" y="558" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="732" y="579" fill="#65b7ff" font-size="13" font-weight="bold">hlm_edispo_klasifikasi</text>
+<text x="993" y="579" fill="#9fb0ca" font-size="10" text-anchor="end">3 row</text>
+<text x="732" y="597" fill="#dce8fa" font-size="10.5">PK: id_klasifikasi</text>
+<text x="732" y="613" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="732" y="629" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="732" y="645" fill="#9fb0ca" font-size="10">5 kolom</text>
+<rect x="1065" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1077" y="91" fill="#65b7ff" font-size="13" font-weight="bold">hlm_surtug</text>
+<text x="1338" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">3086 row</text>
+<text x="1077" y="109" fill="#dce8fa" font-size="10.5">PK: id_surtug</text>
+<text x="1077" y="125" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="1077" y="141" fill="#5be0ac" font-size="10.5">FILE: file_sk</text>
+<text x="1077" y="157" fill="#9fb0ca" font-size="10">20 kolom</text>
+<rect x="1065" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1077" y="213" fill="#65b7ff" font-size="13" font-weight="bold">hlm_surtug_acc</text>
+<text x="1338" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">3199 row</text>
+<text x="1077" y="231" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="1077" y="247" fill="#ffd166" font-size="10.5">REF: id_acc,id_surtug,id_user</text>
+<text x="1077" y="263" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="1077" y="279" fill="#9fb0ca" font-size="10">5 kolom</text>
+<rect x="1065" y="314" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1077" y="335" fill="#65b7ff" font-size="13" font-weight="bold">hlm_surtug_ket</text>
+<text x="1338" y="335" fill="#9fb0ca" font-size="10" text-anchor="end">3864 row</text>
+<text x="1077" y="353" fill="#dce8fa" font-size="10.5">PK: id_keterangan</text>
+<text x="1077" y="369" fill="#ffd166" font-size="10.5">REF: id_surtug,id_user</text>
+<text x="1077" y="385" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="1077" y="401" fill="#9fb0ca" font-size="10">4 kolom</text>
+<rect x="1065" y="436" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1077" y="457" fill="#65b7ff" font-size="13" font-weight="bold">hlm_surtug_peg</text>
+<text x="1338" y="457" fill="#9fb0ca" font-size="10" text-anchor="end">14195 row</text>
+<text x="1077" y="475" fill="#dce8fa" font-size="10.5">PK: id_pegawai</text>
+<text x="1077" y="491" fill="#ffd166" font-size="10.5">REF: id_surtug,id_user</text>
+<text x="1077" y="507" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="1077" y="523" fill="#9fb0ca" font-size="10">8 kolom</text>
+<rect x="1065" y="558" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1077" y="579" fill="#65b7ff" font-size="13" font-weight="bold">hlm_surtug_tembus</text>
+<text x="1338" y="579" fill="#9fb0ca" font-size="10" text-anchor="end">3235 row</text>
+<text x="1077" y="597" fill="#dce8fa" font-size="10.5">PK: id_tembusan</text>
+<text x="1077" y="613" fill="#ffd166" font-size="10.5">REF: id_surtug,id_user</text>
+<text x="1077" y="629" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="1077" y="645" fill="#9fb0ca" font-size="10">4 kolom</text>
+<rect x="1410" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1422" y="91" fill="#65b7ff" font-size="13" font-weight="bold">hlm_alibi</text>
+<text x="1683" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">5953 row</text>
+<text x="1422" y="109" fill="#dce8fa" font-size="10.5">PK: id_alibi</text>
+<text x="1422" y="125" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="1422" y="141" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="1422" y="157" fill="#9fb0ca" font-size="10">21 kolom</text>
+<rect x="1410" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1422" y="213" fill="#65b7ff" font-size="13" font-weight="bold">hlm_alibi_acc</text>
+<text x="1683" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">5991 row</text>
+<text x="1422" y="231" fill="#dce8fa" font-size="10.5">PK: id_acc_alibi</text>
+<text x="1422" y="247" fill="#ffd166" font-size="10.5">REF: id_alibi,id_user</text>
+<text x="1422" y="263" fill="#5be0ac" font-size="10.5">FILE: file_alibi</text>
+<text x="1422" y="279" fill="#9fb0ca" font-size="10">13 kolom</text>
+<rect x="1410" y="314" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1422" y="335" fill="#65b7ff" font-size="13" font-weight="bold">hlm_agenda</text>
+<text x="1683" y="335" fill="#9fb0ca" font-size="10" text-anchor="end">2511 row</text>
+<text x="1422" y="353" fill="#dce8fa" font-size="10.5">PK: id_agenda</text>
+<text x="1422" y="369" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="1422" y="385" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="1422" y="401" fill="#9fb0ca" font-size="10">11 kolom</text>
+<rect x="1755" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1767" y="91" fill="#65b7ff" font-size="13" font-weight="bold">hlm_pens_reg_usul</text>
+<text x="2028" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">302 row</text>
+<text x="1767" y="109" fill="#dce8fa" font-size="10.5">PK: id_penreg</text>
+<text x="1767" y="125" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="1767" y="141" fill="#5be0ac" font-size="10.5">FILE: foto</text>
+<text x="1767" y="157" fill="#9fb0ca" font-size="10">37 kolom</text>
+<rect x="1755" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1767" y="213" fill="#65b7ff" font-size="13" font-weight="bold">hlm_pens_reg_suket</text>
+<text x="2028" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">95 row</text>
+<text x="1767" y="231" fill="#dce8fa" font-size="10.5">PK: id_suket</text>
+<text x="1767" y="247" fill="#ffd166" font-size="10.5">REF: id_suket,id_penreg,id_user</text>
+<text x="1767" y="263" fill="#5be0ac" font-size="10.5">FILE: file_sp,file_sk,file_dpcp</text>
+<text x="1767" y="279" fill="#9fb0ca" font-size="10">15 kolom</text>
+<rect x="1755" y="314" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="1767" y="335" fill="#65b7ff" font-size="13" font-weight="bold">hlm_pens_reg_acc</text>
+<text x="2028" y="335" fill="#9fb0ca" font-size="10" text-anchor="end">292 row</text>
+<text x="1767" y="353" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="1767" y="369" fill="#ffd166" font-size="10.5">REF: id_acc,id_penreg,id_user</text>
+<text x="1767" y="385" fill="#5be0ac" font-size="10.5">FILE: cek_foto</text>
+<text x="1767" y="401" fill="#9fb0ca" font-size="10">23 kolom</text>
+<rect x="2100" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="2112" y="91" fill="#65b7ff" font-size="13" font-weight="bold">hlm_ibel</text>
+<text x="2373" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">72 row</text>
+<text x="2112" y="109" fill="#dce8fa" font-size="10.5">PK: id_ibel</text>
+<text x="2112" y="125" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="2112" y="141" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="2112" y="157" fill="#9fb0ca" font-size="10">12 kolom</text>
+<rect x="2100" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="2112" y="213" fill="#65b7ff" font-size="13" font-weight="bold">hlm_ibel_acc</text>
+<text x="2373" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">43 row</text>
+<text x="2112" y="231" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="2112" y="247" fill="#ffd166" font-size="10.5">REF: id_acc,id_ibel,id_user</text>
+<text x="2112" y="263" fill="#5be0ac" font-size="10.5">FILE: file_sk</text>
+<text x="2112" y="279" fill="#9fb0ca" font-size="10">42 kolom</text>
+<rect x="2100" y="314" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="2112" y="335" fill="#65b7ff" font-size="13" font-weight="bold">hlm_ibel_sphd</text>
+<text x="2373" y="335" fill="#9fb0ca" font-size="10" text-anchor="end">0 row</text>
+<text x="2112" y="353" fill="#dce8fa" font-size="10.5">PK: id_suket</text>
+<text x="2112" y="369" fill="#ffd166" font-size="10.5">REF: id_suket,id_ibel,id_user</text>
+<text x="2112" y="385" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="2112" y="401" fill="#9fb0ca" font-size="10">12 kolom</text>
+<rect x="2445" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="2457" y="91" fill="#65b7ff" font-size="13" font-weight="bold">tugas_belajar</text>
+<text x="2718" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">8 row</text>
+<text x="2457" y="109" fill="#dce8fa" font-size="10.5">PK: id_tb</text>
+<text x="2457" y="125" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="2457" y="141" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="2457" y="157" fill="#9fb0ca" font-size="10">13 kolom</text>
+<rect x="2445" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="2457" y="213" fill="#65b7ff" font-size="13" font-weight="bold">tugas_belajar_acc</text>
+<text x="2718" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">5 row</text>
+<text x="2457" y="231" fill="#dce8fa" font-size="10.5">PK: id_tb_acc</text>
+<text x="2457" y="247" fill="#ffd166" font-size="10.5">REF: id_tb,id_user</text>
+<text x="2457" y="263" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="2457" y="279" fill="#9fb0ca" font-size="10">45 kolom</text>
+<rect x="2790" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="2802" y="91" fill="#65b7ff" font-size="13" font-weight="bold">hlm_gelar</text>
+<text x="3063" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">173 row</text>
+<text x="2802" y="109" fill="#dce8fa" font-size="10.5">PK: id_gelar</text>
+<text x="2802" y="125" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="2802" y="141" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="2802" y="157" fill="#9fb0ca" font-size="10">9 kolom</text>
+<rect x="2790" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="2802" y="213" fill="#65b7ff" font-size="13" font-weight="bold">hlm_gelar_acc</text>
+<text x="3063" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">128 row</text>
+<text x="2802" y="231" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="2802" y="247" fill="#ffd166" font-size="10.5">REF: id_acc,id_gelar,id_user</text>
+<text x="2802" y="263" fill="#5be0ac" font-size="10.5">FILE: file_sk</text>
+<text x="2802" y="279" fill="#9fb0ca" font-size="10">26 kolom</text>
+<rect x="3135" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3147" y="91" fill="#65b7ff" font-size="13" font-weight="bold">hlm_pangkat</text>
+<text x="3408" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">11 row</text>
+<text x="3147" y="109" fill="#dce8fa" font-size="10.5">PK: id_pangkat</text>
+<text x="3147" y="125" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="3147" y="141" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3147" y="157" fill="#9fb0ca" font-size="10">10 kolom</text>
+<rect x="3135" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3147" y="213" fill="#65b7ff" font-size="13" font-weight="bold">hlm_pangkat_jft</text>
+<text x="3408" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">2 row</text>
+<text x="3147" y="231" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="3147" y="247" fill="#ffd166" font-size="10.5">REF: id_acc,id_pangkat,id_user</text>
+<text x="3147" y="263" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3147" y="279" fill="#9fb0ca" font-size="10">27 kolom</text>
+<rect x="3135" y="314" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3147" y="335" fill="#65b7ff" font-size="13" font-weight="bold">hlm_pangkat_jfu</text>
+<text x="3408" y="335" fill="#9fb0ca" font-size="10" text-anchor="end">0 row</text>
+<text x="3147" y="353" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="3147" y="369" fill="#ffd166" font-size="10.5">REF: id_acc,id_pangkat,id_user</text>
+<text x="3147" y="385" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3147" y="401" fill="#9fb0ca" font-size="10">23 kolom</text>
+<rect x="3135" y="436" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3147" y="457" fill="#65b7ff" font-size="13" font-weight="bold">hlm_pangkat_sk</text>
+<text x="3408" y="457" fill="#9fb0ca" font-size="10" text-anchor="end">0 row</text>
+<text x="3147" y="475" fill="#dce8fa" font-size="10.5">PK: id_sk</text>
+<text x="3147" y="491" fill="#ffd166" font-size="10.5">REF: id_pangkat,id_user</text>
+<text x="3147" y="507" fill="#5be0ac" font-size="10.5">FILE: file_sk</text>
+<text x="3147" y="523" fill="#9fb0ca" font-size="10">4 kolom</text>
+<rect x="3135" y="558" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3147" y="579" fill="#65b7ff" font-size="13" font-weight="bold">hlm_pangkat_strk</text>
+<text x="3408" y="579" fill="#9fb0ca" font-size="10" text-anchor="end">0 row</text>
+<text x="3147" y="597" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="3147" y="613" fill="#ffd166" font-size="10.5">REF: id_acc,id_pangkat,id_user</text>
+<text x="3147" y="629" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3147" y="645" fill="#9fb0ca" font-size="10">25 kolom</text>
+<rect x="3480" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="91" fill="#65b7ff" font-size="13" font-weight="bold">hlm_bpjs</text>
+<text x="3753" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">306 row</text>
+<text x="3492" y="109" fill="#dce8fa" font-size="10.5">PK: id_bpjs</text>
+<text x="3492" y="125" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="3492" y="141" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3492" y="157" fill="#9fb0ca" font-size="10">9 kolom</text>
+<rect x="3480" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="213" fill="#65b7ff" font-size="13" font-weight="bold">hlm_bpjs_acc</text>
+<text x="3753" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">214 row</text>
+<text x="3492" y="231" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="3492" y="247" fill="#ffd166" font-size="10.5">REF: id_acc,id_bpjs,id_user</text>
+<text x="3492" y="263" fill="#5be0ac" font-size="10.5">FILE: file_sk</text>
+<text x="3492" y="279" fill="#9fb0ca" font-size="10">28 kolom</text>
+<rect x="3480" y="314" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="335" fill="#65b7ff" font-size="13" font-weight="bold">hlm_taspen</text>
+<text x="3753" y="335" fill="#9fb0ca" font-size="10" text-anchor="end">39 row</text>
+<text x="3492" y="353" fill="#dce8fa" font-size="10.5">PK: id_taspen</text>
+<text x="3492" y="369" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="3492" y="385" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3492" y="401" fill="#9fb0ca" font-size="10">9 kolom</text>
+<rect x="3480" y="436" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="457" fill="#65b7ff" font-size="13" font-weight="bold">hlm_taspen_acc</text>
+<text x="3753" y="457" fill="#9fb0ca" font-size="10" text-anchor="end">14 row</text>
+<text x="3492" y="475" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="3492" y="491" fill="#ffd166" font-size="10.5">REF: id_acc,id_taspen,id_user</text>
+<text x="3492" y="507" fill="#5be0ac" font-size="10.5">FILE: file_sk</text>
+<text x="3492" y="523" fill="#9fb0ca" font-size="10">20 kolom</text>
+<rect x="3480" y="558" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="579" fill="#65b7ff" font-size="13" font-weight="bold">hlm_karpeg</text>
+<text x="3753" y="579" fill="#9fb0ca" font-size="10" text-anchor="end">7 row</text>
+<text x="3492" y="597" fill="#dce8fa" font-size="10.5">PK: id_karpeg</text>
+<text x="3492" y="613" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="3492" y="629" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3492" y="645" fill="#9fb0ca" font-size="10">9 kolom</text>
+<rect x="3480" y="680" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="701" fill="#65b7ff" font-size="13" font-weight="bold">hlm_karpeg_acc</text>
+<text x="3753" y="701" fill="#9fb0ca" font-size="10" text-anchor="end">5 row</text>
+<text x="3492" y="719" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="3492" y="735" fill="#ffd166" font-size="10.5">REF: id_acc,id_karpeg,id_user</text>
+<text x="3492" y="751" fill="#5be0ac" font-size="10.5">FILE: file_sk</text>
+<text x="3492" y="767" fill="#9fb0ca" font-size="10">14 kolom</text>
+<rect x="3480" y="802" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="823" fill="#65b7ff" font-size="13" font-weight="bold">hlm_karisu</text>
+<text x="3753" y="823" fill="#9fb0ca" font-size="10" text-anchor="end">210 row</text>
+<text x="3492" y="841" fill="#dce8fa" font-size="10.5">PK: id_karisu</text>
+<text x="3492" y="857" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="3492" y="873" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3492" y="889" fill="#9fb0ca" font-size="10">9 kolom</text>
+<rect x="3480" y="924" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="945" fill="#65b7ff" font-size="13" font-weight="bold">hlm_karisu_acc</text>
+<text x="3753" y="945" fill="#9fb0ca" font-size="10" text-anchor="end">87 row</text>
+<text x="3492" y="963" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="3492" y="979" fill="#ffd166" font-size="10.5">REF: id_acc,id_karisu,id_user</text>
+<text x="3492" y="995" fill="#5be0ac" font-size="10.5">FILE: file_sk</text>
+<text x="3492" y="1011" fill="#9fb0ca" font-size="10">20 kolom</text>
+<rect x="3480" y="1046" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="1067" fill="#65b7ff" font-size="13" font-weight="bold">hlm_satlen</text>
+<text x="3753" y="1067" fill="#9fb0ca" font-size="10" text-anchor="end">174 row</text>
+<text x="3492" y="1085" fill="#dce8fa" font-size="10.5">PK: id_satlen</text>
+<text x="3492" y="1101" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="3492" y="1117" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3492" y="1133" fill="#9fb0ca" font-size="10">13 kolom</text>
+<rect x="3480" y="1168" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="1189" fill="#65b7ff" font-size="13" font-weight="bold">hlm_satlen_acc</text>
+<text x="3753" y="1189" fill="#9fb0ca" font-size="10" text-anchor="end">148 row</text>
+<text x="3492" y="1207" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="3492" y="1223" fill="#ffd166" font-size="10.5">REF: id_acc,id_satlen,id_user</text>
+<text x="3492" y="1239" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3492" y="1255" fill="#9fb0ca" font-size="10">21 kolom</text>
+<rect x="3480" y="1290" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3492" y="1311" fill="#65b7ff" font-size="13" font-weight="bold">hlm_satlen_sphd</text>
+<text x="3753" y="1311" fill="#9fb0ca" font-size="10" text-anchor="end">72 row</text>
+<text x="3492" y="1329" fill="#dce8fa" font-size="10.5">PK: id_suket</text>
+<text x="3492" y="1345" fill="#ffd166" font-size="10.5">REF: id_suket,id_satlen,id_user</text>
+<text x="3492" y="1361" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3492" y="1377" fill="#9fb0ca" font-size="10">11 kolom</text>
+<rect x="3825" y="70" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3837" y="91" fill="#65b7ff" font-size="13" font-weight="bold">tbl_pmk</text>
+<text x="4098" y="91" fill="#9fb0ca" font-size="10" text-anchor="end">0 row</text>
+<text x="3837" y="109" fill="#dce8fa" font-size="10.5">PK: id_pmk</text>
+<text x="3837" y="125" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="3837" y="141" fill="#5be0ac" font-size="10.5">FILE: file_pmk</text>
+<text x="3837" y="157" fill="#9fb0ca" font-size="10">17 kolom</text>
+<rect x="3825" y="192" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3837" y="213" fill="#65b7ff" font-size="13" font-weight="bold">tbl_pmk_acc</text>
+<text x="4098" y="213" fill="#9fb0ca" font-size="10" text-anchor="end">0 row</text>
+<text x="3837" y="231" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="3837" y="247" fill="#ffd166" font-size="10.5">REF: id_acc,id_pmk,id_user</text>
+<text x="3837" y="263" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3837" y="279" fill="#9fb0ca" font-size="10">13 kolom</text>
+<rect x="3825" y="314" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3837" y="335" fill="#65b7ff" font-size="13" font-weight="bold">tbl_skmi_skpp</text>
+<text x="4098" y="335" fill="#9fb0ca" font-size="10" text-anchor="end">0 row</text>
+<text x="3837" y="353" fill="#dce8fa" font-size="10.5">PK: id_skmi_skpp</text>
+<text x="3837" y="369" fill="#ffd166" font-size="10.5">REF: id_user</text>
+<text x="3837" y="385" fill="#5be0ac" font-size="10.5">FILE: file_skmi_skpp</text>
+<text x="3837" y="401" fill="#9fb0ca" font-size="10">17 kolom</text>
+<rect x="3825" y="436" width="285" height="96" rx="8" fill="#172541" stroke="#65b7ff" stroke-width="1.6"/>
+<text x="3837" y="457" fill="#65b7ff" font-size="13" font-weight="bold">tbl_skmi_skpp_acc</text>
+<text x="4098" y="457" fill="#9fb0ca" font-size="10" text-anchor="end">0 row</text>
+<text x="3837" y="475" fill="#dce8fa" font-size="10.5">PK: id_acc</text>
+<text x="3837" y="491" fill="#ffd166" font-size="10.5">REF: id_skmi_skpp,id_user</text>
+<text x="3837" y="507" fill="#5be0ac" font-size="10.5">FILE: -</text>
+<text x="3837" y="523" fill="#9fb0ca" font-size="10">12 kolom</text>
+</svg></div><p class="small muted">ERD sengaja dibuat lebar dan dapat di-scroll horizontal agar nama tabel serta relasi tetap terbaca. Tabel <code>document_objects</code> belum ada di legacy; itu adalah tabel target untuk metadata object MinIO.</p></section><section><h2>4a. ERD target baru — versi sederhana</h2>
+<p class="muted">Desain disederhanakan berdasarkan audit data legacy. Status/approval terkini yang 1:1 dilipat ke tabel pengajuan. Tabel tambahan hanya dipakai untuk relasi 1:N nyata atau kebutuhan lintas domain.</p><div class="erd"><svg viewBox="0 0 1152 760" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace">
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#65b7ff"/></marker></defs>
+<rect width="1152" height="760" fill="#0a1120"/>
+<text x="28" y="30" fill="#5be0ac" font-size="17" font-weight="bold">SEDAKEP TARGET ERD — SIMPLE VERSION</text>
+<text x="28" y="51" fill="#9fb0ca" font-size="11.5">Approval terkini disimpan di tabel pengajuan; tabel detail hanya untuk relasi 1:N yang nyata.</text>
+<text x="28" y="61" fill="#7f8ea8" font-size="10.5">MASTER DATA</text>
+<line x1="28" y1="68" x2="1124" y2="68" stroke="#293a59"/>
+<text x="28" y="233" fill="#7f8ea8" font-size="10.5">PENGAJUAN</text>
+<line x1="28" y1="240" x2="1124" y2="240" stroke="#293a59"/>
+<text x="28" y="405" fill="#7f8ea8" font-size="10.5">DETAIL 1:N</text>
+<line x1="28" y1="412" x2="1124" y2="412" stroke="#293a59"/>
+<text x="28" y="577" fill="#7f8ea8" font-size="10.5">STORAGE / AUDIT / MIGRASI</text>
+<line x1="28" y1="584" x2="1124" y2="584" stroke="#293a59"/>
+<path d="M153.0,178 L153.0,214 L153.0,214 L153.0,250" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,178 L153.0,214 L435.0,214 L435.0,250" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,178 L153.0,214 L717.0,214 L717.0,250" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,178 L153.0,214 L999.0,214 L999.0,250" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,178 L153.0,300 L153.0,300 L153.0,422" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M435.0,128.0 L717.0,128.0" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M999.0,178 L999.0,214 L717.0,214 L717.0,250" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M717.0,350 L717.0,386 L717.0,386 L717.0,422" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M999.0,350 L999.0,386 L999.0,386 L999.0,422" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,472.0 L435.0,472.0" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M999.0,178 L999.0,300 L435.0,300 L435.0,422" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M999.0,178 L999.0,386 L153.0,386 L153.0,594" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M153.0,178 L153.0,386 L435.0,386 L435.0,594" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<path d="M999.0,178 L999.0,386 L999.0,386 L999.0,594" fill="none" stroke="#65b7ff" stroke-width="1.3" opacity=".8" marker-end="url(#a)"/>
+<rect x="28" y="78" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="40" y="99" fill="#65b7ff" font-size="13.5" font-weight="bold">users</text>
+<text x="268" y="99" fill="#5be0ac" font-size="9.5" text-anchor="end">master</text>
+<text x="40" y="121" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="40" y="136" fill="#ffd166" font-size="10.5">username UNIQUE</text>
+<text x="40" y="151" fill="#dce8fa" font-size="10.5">password_hash</text>
+<text x="40" y="166" fill="#dce8fa" font-size="10.5">role, employee_no</text>
+<rect x="310" y="78" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="322" y="99" fill="#65b7ff" font-size="13.5" font-weight="bold">organizations</text>
+<text x="550" y="99" fill="#5be0ac" font-size="9.5" text-anchor="end">master</text>
+<text x="322" y="121" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="322" y="136" fill="#dce8fa" font-size="10.5">name, code</text>
+<text x="322" y="151" fill="#dce8fa" font-size="10.5">address</text>
+<rect x="592" y="78" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="604" y="99" fill="#65b7ff" font-size="13.5" font-weight="bold">positions</text>
+<text x="832" y="99" fill="#5be0ac" font-size="9.5" text-anchor="end">master</text>
+<text x="604" y="121" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="604" y="136" fill="#ffd166" font-size="10.5">organization_id FK</text>
+<text x="604" y="151" fill="#dce8fa" font-size="10.5">name, grade</text>
+<rect x="874" y="78" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="886" y="99" fill="#65b7ff" font-size="13.5" font-weight="bold">documents</text>
+<text x="1114" y="99" fill="#5be0ac" font-size="9.5" text-anchor="end">storage</text>
+<text x="886" y="121" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="886" y="136" fill="#ffd166" font-size="10.5">object_key UNIQUE</text>
+<text x="886" y="151" fill="#dce8fa" font-size="10.5">bucket, sha256</text>
+<text x="886" y="166" fill="#dce8fa" font-size="10.5">size_bytes, mime_type</text>
+<rect x="28" y="250" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="40" y="271" fill="#65b7ff" font-size="13.5" font-weight="bold">leave_requests</text>
+<text x="268" y="271" fill="#5be0ac" font-size="9.5" text-anchor="end">request</text>
+<text x="40" y="293" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="40" y="308" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="40" y="323" fill="#dce8fa" font-size="10.5">leave fields + dates</text>
+<text x="40" y="338" fill="#dce8fa" font-size="10.5">status + approval snapshot</text>
+<rect x="310" y="250" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="322" y="271" fill="#65b7ff" font-size="13.5" font-weight="bold">leave_quotas</text>
+<text x="550" y="271" fill="#5be0ac" font-size="9.5" text-anchor="end">request</text>
+<text x="322" y="293" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="322" y="308" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="322" y="323" fill="#dce8fa" font-size="10.5">year, quota, used</text>
+<text x="322" y="338" fill="#dce8fa" font-size="10.5">remaining</text>
+<rect x="592" y="250" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="604" y="271" fill="#65b7ff" font-size="13.5" font-weight="bold">incoming_letters</text>
+<text x="832" y="271" fill="#5be0ac" font-size="9.5" text-anchor="end">request</text>
+<text x="604" y="293" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="604" y="308" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="604" y="323" fill="#dce8fa" font-size="10.5">number, subject</text>
+<text x="604" y="338" fill="#dce8fa" font-size="10.5">status + file_id</text>
+<rect x="874" y="250" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="886" y="271" fill="#65b7ff" font-size="13.5" font-weight="bold">assignment_letters</text>
+<text x="1114" y="271" fill="#5be0ac" font-size="9.5" text-anchor="end">request</text>
+<text x="886" y="293" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="886" y="308" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="886" y="323" fill="#dce8fa" font-size="10.5">number, subject</text>
+<text x="886" y="338" fill="#dce8fa" font-size="10.5">status + approval</text>
+<rect x="28" y="422" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="40" y="443" fill="#65b7ff" font-size="13.5" font-weight="bold">employee_services</text>
+<text x="268" y="443" fill="#5be0ac" font-size="9.5" text-anchor="end">request</text>
+<text x="40" y="465" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="40" y="480" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="40" y="495" fill="#dce8fa" font-size="10.5">service_type</text>
+<text x="40" y="510" fill="#dce8fa" font-size="10.5">status + approval snapshot</text>
+<rect x="592" y="422" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="604" y="443" fill="#65b7ff" font-size="13.5" font-weight="bold">dispositions</text>
+<text x="832" y="443" fill="#5be0ac" font-size="9.5" text-anchor="end">detail</text>
+<text x="604" y="465" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="604" y="480" fill="#ffd166" font-size="10.5">letter_id FK</text>
+<text x="604" y="495" fill="#dce8fa" font-size="10.5">from/to user</text>
+<text x="604" y="510" fill="#dce8fa" font-size="10.5">status, note</text>
+<rect x="874" y="422" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="886" y="443" fill="#65b7ff" font-size="13.5" font-weight="bold">assignment_members</text>
+<text x="1114" y="443" fill="#5be0ac" font-size="9.5" text-anchor="end">detail</text>
+<text x="886" y="465" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="886" y="480" fill="#ffd166" font-size="10.5">assignment_id FK</text>
+<text x="886" y="495" fill="#dce8fa" font-size="10.5">employee_name, nip</text>
+<text x="886" y="510" fill="#dce8fa" font-size="10.5">role</text>
+<rect x="310" y="422" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="322" y="443" fill="#65b7ff" font-size="13.5" font-weight="bold">service_documents</text>
+<text x="550" y="443" fill="#5be0ac" font-size="9.5" text-anchor="end">detail</text>
+<text x="322" y="465" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="322" y="480" fill="#ffd166" font-size="10.5">service_id FK</text>
+<text x="322" y="495" fill="#ffd166" font-size="10.5">document_id FK</text>
+<text x="322" y="510" fill="#dce8fa" font-size="10.5">document_type</text>
+<rect x="28" y="594" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="40" y="615" fill="#65b7ff" font-size="13.5" font-weight="bold">document_links</text>
+<text x="268" y="615" fill="#5be0ac" font-size="9.5" text-anchor="end">detail</text>
+<text x="40" y="637" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="40" y="652" fill="#ffd166" font-size="10.5">document_id FK</text>
+<text x="40" y="667" fill="#dce8fa" font-size="10.5">entity_type/id</text>
+<text x="40" y="682" fill="#dce8fa" font-size="10.5">field_name</text>
+<rect x="310" y="594" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="322" y="615" fill="#65b7ff" font-size="13.5" font-weight="bold">audit_logs</text>
+<text x="550" y="615" fill="#5be0ac" font-size="9.5" text-anchor="end">tracking</text>
+<text x="322" y="637" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="322" y="652" fill="#ffd166" font-size="10.5">user_id FK</text>
+<text x="322" y="667" fill="#dce8fa" font-size="10.5">action</text>
+<text x="322" y="682" fill="#dce8fa" font-size="10.5">entity_type/id</text>
+<rect x="874" y="594" width="250" height="100" rx="9" fill="#172541" stroke="#65b7ff" stroke-width="1.7"/>
+<text x="886" y="615" fill="#65b7ff" font-size="13.5" font-weight="bold">migration_items</text>
+<text x="1114" y="615" fill="#5be0ac" font-size="9.5" text-anchor="end">tracking</text>
+<text x="886" y="637" fill="#ffd166" font-size="10.5">PK id</text>
+<text x="886" y="652" fill="#ffd166" font-size="10.5">source_identity UNIQUE</text>
+<text x="886" y="667" fill="#dce8fa" font-size="10.5">object_key</text>
+<text x="886" y="682" fill="#dce8fa" font-size="10.5">sha256, status</text>
+</svg></div>
+<h3>Aturan schema target</h3><ul><li><code>leave_requests</code> menyimpan status dan snapshot approval atasan 1/2. Tidak ada tabel <code>leave_approvals</code> terpisah untuk approval terkini.</li><li><code>employee_services</code> juga menyimpan status dan snapshot approval. <code>service_documents</code> hanya untuk banyak dokumen layanan.</li><li><code>dispositions</code> dan <code>assignment_members</code> dipertahankan karena satu surat bisa punya banyak disposisi/anggota.</li><li><code>documents</code> wajib ada karena metadata object MinIO berbeda dari data bisnis. <code>document_links</code> dipakai saat satu entity memiliki banyak field file.</li><li><code>audit_logs</code> dan <code>migration_items</code> bukan tabel bisnis; keduanya untuk audit dan migrasi resumable.</li></ul>
+<h3>Contoh <code>leave_requests</code> sederhana</h3><pre>leave_requests
+- id
+- user_id
+- leave_type
+- reason
+- start_date, end_date, duration
+- address_during_leave, phone
+- document_id
+- status
+- approver_1_id, approver_1_status, approver_1_at
+- approver_2_id, approver_2_status, approver_2_at
+- rejection_reason
+- created_at, updated_at</pre>
+</section><section><h2>4b. Inventaris tabel dan kolom dokumen</h2>
+<p class="muted">Daftar lengkap tabel/view legacy: tipe, estimasi baris, jumlah kolom, primary key, dan kolom penyimpanan file. Kolom yang berisi file inilah yang menjadi sumber scanning migrasi MinIO.</p>
+<div style="max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:10px">
+<table><thead><tr><th>Tabel/View</th><th>Tipe</th><th>± Baris</th><th>Kolom</th><th>Primary key</th><th>Kolom file</th></tr></thead><tbody><tr><td><code>tbl_user</code></td><td>table</td><td>1710</td><td>11</td><td class='small'>id_user</td><td class='small'>-</td></tr><tr><td><code>tbl_admin</code></td><td>table</td><td>0</td><td>6</td><td class='small'>id_admin</td><td class='small'>-</td></tr><tr><td><code>tbl_instansi</code></td><td>table</td><td>1</td><td>11</td><td class='small'>id_instansi</td><td class='small'>logo</td></tr><tr><td><code>tbl_dept</code></td><td>table</td><td>43</td><td>3</td><td class='small'>dept_id</td><td class='small'>-</td></tr><tr><td><code>tbl_jabatan</code></td><td>table</td><td>174</td><td>3</td><td class='small'>jabatan_id</td><td class='small'>-</td></tr><tr><td><code>tbl_sett</code></td><td>table</td><td>1</td><td>5</td><td class='small'>id_sett</td><td class='small'>-</td></tr><tr><td><code>tbl_n2019</code></td><td>table</td><td>467</td><td>9</td><td class='small'>nomor</td><td class='small'>-</td></tr><tr><td><code>tbl_pppk_tmt</code></td><td>table</td><td>159</td><td>7</td><td class='small'>id_pppk_tmt</td><td class='small'>-</td></tr><tr><td><code>tbl_cuti_settings</code></td><td>table</td><td>7</td><td>9</td><td class='small'>id_setting</td><td class='small'>-</td></tr><tr><td><code>tbl_surat_masuk</code></td><td>table</td><td>7753</td><td>24</td><td class='small'>id_surat</td><td class='small'>file</td></tr><tr><td><code>tbl_acc</code></td><td>table</td><td>7862</td><td>20</td><td class='small'>id_acc</td><td class='small'>-</td></tr><tr><td><code>tbl_suket</code></td><td>table</td><td>3367</td><td>8</td><td class='small'>id_suket</td><td class='small'>file_sk</td></tr><tr><td><code>tbl_suketmad</code></td><td>table</td><td>596</td><td>4</td><td class='small'>id_suketmad</td><td class='small'>file_sk</td></tr><tr><td><code>tbl_cuti_quota</code></td><td>table</td><td>1454</td><td>25</td><td class='small'>id_quota</td><td class='small'>-</td></tr><tr><td><code>tbl_cuti_quota_log</code></td><td>table</td><td>259</td><td>15</td><td class='small'>id_log</td><td class='small'>-</td></tr><tr><td><code>vw_cuti_quota_summary</code></td><td></td><td></td><td>25</td><td class='small'>-</td><td class='small'>-</td></tr><tr><td><code>hlm_edispo</code></td><td>table</td><td>6696</td><td>15</td><td class='small'>id_surat</td><td class='small'>file</td></tr><tr><td><code>hlm_edispo_acc</code></td><td>table</td><td>6788</td><td>6</td><td class='small'>id_dispo</td><td class='small'>-</td></tr><tr><td><code>hlm_edispo_disposisi</code></td><td>table</td><td>6776</td><td>7</td><td class='small'>id_disposisi</td><td class='small'>-</td></tr><tr><td><code>hlm_edispo_final</code></td><td>table</td><td>6112</td><td>6</td><td class='small'>id_final</td><td class='small'>-</td></tr><tr><td><code>hlm_edispo_klasifikasi</code></td><td>table</td><td>3</td><td>5</td><td class='small'>id_klasifikasi</td><td class='small'>-</td></tr><tr><td><code>hlm_surtug</code></td><td>table</td><td>3086</td><td>20</td><td class='small'>id_surtug</td><td class='small'>file_sk</td></tr><tr><td><code>hlm_surtug_acc</code></td><td>table</td><td>3199</td><td>5</td><td class='small'>id_acc</td><td class='small'>-</td></tr><tr><td><code>hlm_surtug_ket</code></td><td>table</td><td>3864</td><td>4</td><td class='small'>id_keterangan</td><td class='small'>-</td></tr><tr><td><code>hlm_surtug_peg</code></td><td>table</td><td>14195</td><td>8</td><td class='small'>id_pegawai</td><td class='small'>-</td></tr><tr><td><code>hlm_surtug_tembus</code></td><td>table</td><td>3235</td><td>4</td><td class='small'>id_tembusan</td><td class='small'>-</td></tr><tr><td><code>hlm_alibi</code></td><td>table</td><td>5953</td><td>21</td><td class='small'>id_alibi</td><td class='small'>-</td></tr><tr><td><code>hlm_alibi_acc</code></td><td>table</td><td>5991</td><td>13</td><td class='small'>id_acc_alibi</td><td class='small'>file_alibi</td></tr><tr><td><code>hlm_agenda</code></td><td>table</td><td>2511</td><td>11</td><td class='small'>id_agenda</td><td class='small'>report</td></tr><tr><td><code>hlm_pens_reg_usul</code></td><td>table</td><td>302</td><td>37</td><td class='small'>id_penreg</td><td class='small'>foto</td></tr><tr><td><code>hlm_pens_reg_suket</code></td><td>table</td><td>95</td><td>15</td><td class='small'>id_suket</td><td class='small'>file_sp,file_sk,file_dpcp</td></tr><tr><td><code>hlm_pens_reg_acc</code></td><td>table</td><td>292</td><td>23</td><td class='small'>id_acc</td><td class='small'>cek_foto</td></tr><tr><td><code>hlm_ibel</code></td><td>table</td><td>72</td><td>12</td><td class='small'>id_ibel</td><td class='small'>-</td></tr><tr><td><code>hlm_ibel_acc</code></td><td>table</td><td>43</td><td>42</td><td class='small'>id_acc</td><td class='small'>file_sk</td></tr><tr><td><code>hlm_ibel_sphd</code></td><td>table</td><td>0</td><td>12</td><td class='small'>id_suket</td><td class='small'>-</td></tr><tr><td><code>tugas_belajar</code></td><td>table</td><td>8</td><td>13</td><td class='small'>id_tb</td><td class='small'>-</td></tr><tr><td><code>tugas_belajar_acc</code></td><td>table</td><td>5</td><td>45</td><td class='small'>id_tb_acc</td><td class='small'>-</td></tr><tr><td><code>hlm_gelar</code></td><td>table</td><td>173</td><td>9</td><td class='small'>id_gelar</td><td class='small'>-</td></tr><tr><td><code>hlm_gelar_acc</code></td><td>table</td><td>128</td><td>26</td><td class='small'>id_acc</td><td class='small'>file_sk</td></tr><tr><td><code>hlm_pangkat</code></td><td>table</td><td>11</td><td>10</td><td class='small'>id_pangkat</td><td class='small'>-</td></tr><tr><td><code>hlm_pangkat_jft</code></td><td>table</td><td>2</td><td>27</td><td class='small'>id_acc</td><td class='small'>-</td></tr><tr><td><code>hlm_pangkat_jfu</code></td><td>table</td><td>0</td><td>23</td><td class='small'>id_acc</td><td class='small'>-</td></tr><tr><td><code>hlm_pangkat_sk</code></td><td>table</td><td>0</td><td>4</td><td class='small'>id_sk</td><td class='small'>file_sk</td></tr><tr><td><code>hlm_pangkat_strk</code></td><td>table</td><td>0</td><td>25</td><td class='small'>id_acc</td><td class='small'>-</td></tr><tr><td><code>hlm_bpjs</code></td><td>table</td><td>306</td><td>9</td><td class='small'>id_bpjs</td><td class='small'>-</td></tr><tr><td><code>hlm_bpjs_acc</code></td><td>table</td><td>214</td><td>28</td><td class='small'>id_acc</td><td class='small'>file_sk</td></tr><tr><td><code>hlm_taspen</code></td><td>table</td><td>39</td><td>9</td><td class='small'>id_taspen</td><td class='small'>-</td></tr><tr><td><code>hlm_taspen_acc</code></td><td>table</td><td>14</td><td>20</td><td class='small'>id_acc</td><td class='small'>file_sk</td></tr><tr><td><code>hlm_karpeg</code></td><td>table</td><td>7</td><td>9</td><td class='small'>id_karpeg</td><td class='small'>-</td></tr><tr><td><code>hlm_karpeg_acc</code></td><td>table</td><td>5</td><td>14</td><td class='small'>id_acc</td><td class='small'>file_sk</td></tr><tr><td><code>hlm_karisu</code></td><td>table</td><td>210</td><td>9</td><td class='small'>id_karisu</td><td class='small'>-</td></tr><tr><td><code>hlm_karisu_acc</code></td><td>table</td><td>87</td><td>20</td><td class='small'>id_acc</td><td class='small'>file_sk</td></tr><tr><td><code>hlm_satlen</code></td><td>table</td><td>174</td><td>13</td><td class='small'>id_satlen</td><td class='small'>-</td></tr><tr><td><code>hlm_satlen_acc</code></td><td>table</td><td>148</td><td>21</td><td class='small'>id_acc</td><td class='small'>-</td></tr><tr><td><code>hlm_satlen_sphd</code></td><td>table</td><td>72</td><td>11</td><td class='small'>id_suket</td><td class='small'>-</td></tr><tr><td><code>tbl_pmk</code></td><td>table</td><td>0</td><td>17</td><td class='small'>id_pmk</td><td class='small'>file_pmk</td></tr><tr><td><code>tbl_pmk_acc</code></td><td>table</td><td>0</td><td>13</td><td class='small'>id_acc</td><td class='small'>-</td></tr><tr><td><code>tbl_skmi_skpp</code></td><td>table</td><td>0</td><td>17</td><td class='small'>id_skmi_skpp</td><td class='small'>file_skmi_skpp</td></tr><tr><td><code>tbl_skmi_skpp_acc</code></td><td>table</td><td>0</td><td>12</td><td class='small'>id_acc</td><td class='small'>-</td></tr></tbody></table></div>
+<div class="notice"><b>Kolom file yang wajib dipetakan.</b> Referensi file tersebar di 22 kolom berbeda pada 20 tabel, termasuk pola kolom jamak <code>file_1</code> sampai <code>file_14</code> pada <code>hlm_pens_reg_usul</code>, kolom <code>report</code> pada <code>hlm_agenda</code>, dan <code>logo</code> pada <code>tbl_instansi</code>. Scanner migrasi harus eksplisit membaca daftar kolom ini, bukan menebak dari nama file saja.</div>
+</section><section><h2>4c. Peta folder upload ke tabel</h2>
+<p class="muted">Lokasi folder tidak disimpan di database. Nama file di kolom database hanya nama file, sementara direktorinya ditentukan di kode PHP. Peta ini wajib dipakai scanner migrasi agar file bisa ditemukan.</p>
+<div style="overflow:auto;border:1px solid var(--line);border-radius:10px">
+<table><thead><tr><th>Folder legacy</th><th>± File</th><th>Kolom database</th><th>Isi</th><th>Subfolder</th></tr></thead><tbody><tr><td><code>upload/</code></td><td>±395</td><td class='small'>tbl_instansi.logo, tbl_surat_masuk.file, tbl_suket.file_sk, tbl_suketmad.file_sk, tbl_user paraf</td><td>Surat masuk + surat keterangan + paraf + logo instansi</td><td class='small'>upload/surat_masuk, upload/surat_keterangan, upload/paraf</td></tr><tr><td><code>disposisi/upload/</code></td><td>765</td><td class='small'>hlm_edispo.file</td><td>Lembar disposisi hasil scan</td><td class='small'>disposisi/upload/surat_masuk</td></tr><tr><td><code>pensiun/upload/</code></td><td>372</td><td class='small'>hlm_pens_reg_usul.file_1..file_14, hlm_pens_reg_suket.file_sk/file_dpcp/file_sp, hlm_pens_reg_acc.cek_foto</td><td>Berkas usul pensiun (14 slot dokumen)</td><td class='small'>pensiun/upload/usul</td></tr><tr><td><code>satyalencana/upload/</code></td><td>101</td><td class='small'>hlm_satlen_sphd.*, hlm_satlen_acc.file_sk</td><td>Piagam, DRH, data usul satya lencana</td><td class='small'>upload/sphudis, piagam, drh, drh_apl, data</td></tr><tr><td><code>bpjs/upload/</code></td><td>221</td><td class='small'>hlm_bpjs_acc.file_sk</td><td>Berkas usul kartu BPJS</td><td class='small'>bpjs/upload/kartu</td></tr><tr><td><code>ijinbelajar/upload/</code></td><td>17</td><td class='small'>hlm_ibel_acc.file_sk, hlm_ibel_sphd.*</td><td>Berkas usul ijin belajar</td><td class='small'>-</td></tr><tr><td><code>gelar/upload/</code></td><td>6</td><td class='small'>hlm_gelar_acc.file_sk</td><td>SK pencantuman gelar + dokumen pendukung</td><td class='small'>gelar/upload/sk</td></tr><tr><td><code>skmi_skpp/upload/</code></td><td>6</td><td class='small'>tbl_skmi_skpp.file_skmi_skpp, tbl_skmi_skpp_acc.*</td><td>Berkas usul SKMI/SKPP</td><td class='small'>upload + upload_hasil</td></tr><tr><td><code>kariskarsu/upload/</code></td><td>2</td><td class='small'>hlm_karisu_acc.file_sk</td><td>Berkas kartu istri/suami</td><td class='small'>kariskarsu/upload/karisu</td></tr><tr><td><code>surattugas/upload/</code></td><td>3</td><td class='small'>hlm_surtug.file_sk</td><td>SK surat tugas</td><td class='small'>-</td></tr><tr><td><code>tugasbelajar/upload/</code></td><td>4</td><td class='small'>tugas_belajar_acc.*</td><td>Dokumen tugas belajar</td><td class='small'>-</td></tr><tr><td><code>agenda/upload/</code></td><td>3</td><td class='small'>hlm_agenda.report</td><td>Laporan agenda</td><td class='small'>-</td></tr><tr><td><code>pangkat/upload/</code></td><td>1</td><td class='small'>hlm_pangkat_sk.file_sk</td><td>SK pangkat, JFT/JFU, STRK</td><td class='small'>pangkat/upload/jft, strk, jfu</td></tr><tr><td><code>taspen/upload/</code></td><td>1</td><td class='small'>hlm_taspen_acc.file_sk</td><td>Berkas kartu taspen</td><td class='small'>taspen/upload/kartutuaspen</td></tr><tr><td><code>karpeg/upload/</code></td><td>1</td><td class='small'>hlm_karpeg_acc.file_sk</td><td>Berkas kartu pegawai</td><td class='small'>-</td></tr><tr><td><code>alibi/upload_alb/</code></td><td>1</td><td class='small'>hlm_alibi_acc.file_alibi</td><td>Lampiran alibi</td><td class='small'>-</td></tr><tr><td><code>pmk/upload/</code></td><td>0</td><td class='small'>tbl_pmk.file_pmk</td><td>Berkas PMK</td><td class='small'>upload + upload_hasil</td></tr>
+<tr><th>Total</th><th>1899</th><th colspan="3">± file terpetakan ke referensi database</th></tr>
+</tbody></table></div>
+<div class="notice warn"><b>Jangan hanya mengandalkan nama file.</b> Ada 4 berkas di <code>skmi_skpp/upload_hasil</code> yang tidak punya baris database (tabel <code>tbl_skmi_skpp</code> kosong). Sebaliknya, ada ribuan baris database yang kolom filenya kosong. Migrasi harus melaporkan dua arah: &quot;file tanpa referensi&quot; dan &quot;referensi tanpa file&quot;.</div>
+</section><section><h2>5. Adapter yang sudah ditambahkan ke codebase</h2><ul><li><code>api/db/mysql.ts</code> — pool MySQL, query, execute, transaction, healthcheck, graceful close.</li><li><code>api/shared/storage.ts</code> — <code>StoragePort</code>, <code>MinioStorage</code>, <code>LocalStorage</code>, stream upload, head/get/delete, exists, presigned URL.</li><li><code>api/config/index.ts</code> — konfigurasi MySQL dan MinIO terpusat serta validasi production.</li><li><code>.env.example</code> — seluruh variable koneksi.</li><li><code>api/shared/storage-client.ts</code> — satu instance S3Client untuk seluruh aplikasi.</li><li><code>api/shared/storage-bucket.ts</code> — pembuatan bucket dan health check.</li><li>Dependencies: <code>mysql2</code>, <code>@aws-sdk/client-s3</code>, <code>@aws-sdk/s3-request-presigner</code>.</li></ul>
+<div class="notice ok"><b>Sudah diverifikasi terhadap server nyata, bukan hanya typecheck.</b>
+<pre>bun run mysql:verify   → ping ✓  versi 10.4.28-MariaDB ✓  parameter binding ✓
+bun run storage:verify → bucket ✓  putFromFile ✓  head ✓  exists ✓
+                         get+checksum sha256 ✓  null handling ✓
+                         presigned URL ✓  remove ✓</pre>
+Adapter MinIO diuji langsung ke MinIO lokal (<code>127.0.0.1:9000</code>) dengan file berisi spasi pada nama dan path, dan checksum hasil unduh identik dengan sumber.</div><pre>const storage = getStorage();
+await storage.putFromFile('/legacy/upload/file.pdf', 'legacy/leave/123/file.pdf');
+const meta = await storage.head('legacy/leave/123/file.pdf');
+const stream = await storage.get('legacy/leave/123/file.pdf');</pre></section>
+<section><h2>6. Desain migrasi resumable</h2><pre>document_objects
+- id
+- source_table
+- source_column
+- source_record_id
+- legacy_path
+- object_key (deterministic)
+- original_filename
+- mime_type
+- size_bytes
+- sha256
+- bucket
+- migration_status
+- migrated_at
+- last_verified_at
+
+UNIQUE(source_table, source_column, source_record_id)
+UNIQUE(bucket, object_key)</pre><ol><li>Scan referensi file dari database legacy dan mapping direktori.</li><li>Buat identity deterministik berdasarkan tabel, kolom, ID record, dan filename.</li><li>Hitung ukuran + SHA-256.</li><li><code>HEAD</code> ke MinIO; skip jika key dan metadata/checksum cocok.</li><li>Upload stream jika belum ada atau tidak cocok.</li><li>Verifikasi ulang object.</li><li>Commit metadata/status database hanya setelah upload terverifikasi.</li><li>Ulangi scan untuk menangkap data baru. Writer aplikasi baru langsung dual-write ke MinIO, bukan filesystem legacy.</li></ol><div class="notice">Migrasi tidak boleh memakai random object key. Key deterministik adalah syarat agar retry tidak membuat duplikasi.</div></section>
+<section><h2>7. Plan implementasi lengkap</h2>
+<p>Plan implementasi kini disatukan dalam satu dokumen: <code>docs/sedakep-plan.md</code>.
+Bagian ini memuat ringkasan fase; detail per fase, gate, dan definition of done ada di file tersebut.</p>
+
+<h3>7.1 Rangkuman fase</h3>
+<ol>
+<li><b>Baseline dan kontrak perilaku</b> — peta modul, role matrix, enum, kebijakan anomali data, fixture engine PHP.</li>
+<li><b>Schema target dan migration database</b> — migration MySQL bernomor, up/down, unique constraint, seed policy.</li>
+<li><b>Adapter runtime</b> — MySQL + MinIO, healthcheck, endpoint file terproteksi.</li>
+<li><b>Pure quota engine</b> — <code>quota-engine.ts</code> tanpa SQL, aturan N/N-1/N-2, parity test lawan PHP.</li>
+<li><b>Read API</b> — daftar/detail permohonan dan endpoint quota read-only, parameterized SQL.</li>
+<li><b>Create dan edit permohonan</b> — validasi server-side, lock user/tahun, exclude current saat edit, upload aman.</li>
+<li><b>Approval dan workflow</b> — approve per level, reject, cancel, idempotent, rebuild saldo saat final.</li>
+<li><b>Projection, rollover, policy, admin</b> — rebuild, SK/policy, override eligibility, Cuti Besar, audit.</li>
+<li><b>Migrasi data database</b> — import request dan approval, deduplicate, discrepancy report.</li>
+<li><b>Migrasi dokumen ke MinIO</b> — object key deterministik, HEAD/checksum, resumable, final scan.</li>
+<li><b>Frontend React</b> — daftar, form, simulasi quota, approval, histori, admin.</li>
+<li><b>Port seluruh modul bisnis</b> — surat tugas (4.331 baris), alibi (4.287), agenda (1.096), disposisi (7.929), pensiun (5.442), izin belajar (7.715), tugas belajar (1.416), gelar (4.355), karpeg (2.767), karis/karsu (3.556), BPJS (4.368), pangkat (11.524), PMK (824), satya lencana (4.945), SKMI/SKPP (767), taspen (3.573), backup (5.357), PDF/QR. Rincian per modul ada di Fase 12 plan.</li>
+<li><b>PDF, QR, dokumen cetak</b> — generator TypeScript, output ke MinIO, akses terproteksi.</li>
+<li><b>Regression, cutover, retirement</b> — regression matrix, cutover berjenjang, fallback legacy read-only.</li>
+</ol>
+
+<h3>7.2 Risiko dan mitigasi</h3>
+<table><thead><tr><th>Risiko</th><th>Dampak</th><th>Mitigasi</th></tr></thead><tbody>
+<tr><td>Logic quota berbeda antar fungsi legacy</td><td>Saldo tidak konsisten</td><td>Satu pure engine canonical + parity test</td></tr>
+<tr><td>Approval legacy duplicate/orphan</td><td>Double count atau data hilang</td><td>Deduplicate, quarantine conflict, discrepancy report</td></tr>
+<tr><td>Projection quota tidak lengkap</td><td>Saldo salah</td><td>Rebuild dari <code>leave_requests</code>, bukan copy snapshot</td></tr>
+<tr><td>Race condition pengajuan</td><td>Oversubscribe kuota</td><td>Transaction + user/year lock atau reservation atomik</td></tr>
+<tr><td>Retry migrasi membuat duplikat</td><td>Biaya storage dan metadata ganda</td><td>Source identity, unique constraint, deterministic key, HEAD/checksum</td></tr>
+<tr><td>File hilang</td><td>Dokumen tidak terbaca</td><td>Missing report, legacy fallback, verifikasi sebelum menghapus source</td></tr>
+<tr><td>Data baru selama migrasi</td><td>Dokumen tidak ikut</td><td>Incremental fingerprint scan + final catch-up scan</td></tr>
+<tr><td>Password MD5 lama</td><td>Keamanan lemah</td><td>Upgrade hash saat login, jalur MD5 dinonaktifkan setelah migrasi</td></tr>
+<tr><td>Periode tutup hard-code</td><td>Aturan kedaluwarsa</td><td>Policy table/config dengan timezone eksplisit</td></tr>
+<tr><td>PDF legacy berubah tampilan</td><td>Keluhan pengguna</td><td>Golden sample + regression comparison sebelum cutover</td></tr>
+<tr><td>Filesystem legacy dihapus terlalu cepat</td><td>Kehilangan data</td><td>Arsip + periode observasi fallback read-only</td></tr>
+</tbody></table>
+
+<p class="small">Detail lengkap: <code>docs/sedakep-plan.md</code>. Logic cuti dan perhitungan kuota dirinci di <code>docs/cuti-quota-logic-report.html</code>.</p>
+</section><section>
+<h2>8. Status saat report dibuat</h2><table><tr><th>Item</th><th>Status</th></tr><tr><td>Audit source PHP/database</td><td>Selesai tahap awal</td></tr><tr><td>ERD awal</td><td>Tersedia di report ini; relasi implisit perlu validasi per modul</td></tr><tr><td>MySQL adapter</td><td>Ditambahkan dan <b>terverifikasi</b> ke MariaDB 10.4.28</td></tr><tr><td>MinIO/S3 adapter</td><td>Ditambahkan dan <b>terverifikasi</b> end-to-end ke MinIO lokal</td></tr><tr><td>Config env</td><td>Sudah diperbarui</td></tr><tr><td>Migration database dan file</td><td>Belum diimplementasikan; tahap berikutnya</td></tr>
+<tr><td>Test suite</td><td>36 test lulus, typecheck bersih</td></tr><tr><td>MinIO runtime lokal</td><td>Aktif di <code>127.0.0.1:9000</code> (data: <code>.minio-data/</code>), bucket <code>sedakep-documents</code> dibuat</td></tr></table></section>
+<footer class="muted small">Report ini adalah baseline teknis sebelum implementasi porting modul. Angka dan relasi berasal dari inspeksi source serta metadata database lokal pada saat report dibuat.</footer>
+</main></body></html>

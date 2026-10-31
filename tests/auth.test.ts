@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { app } from '../api/app';
-import { getDb } from '../api/db';
+import { getMySql } from '../api/db/mysql';
+import { assertTestDatabase, describeDb } from './helpers/db';
 
 type Body = { success: boolean; data: any; message: string; code: number };
 
@@ -18,7 +19,7 @@ const postJson = (path: string, payload: unknown, headers: Record<string, string
   });
 
 const registerUser = (username = 'hanafi', password = 'password123') =>
-  postJson('/api/v1/users/register', { username, password });
+  postJson('/api/v1/users/register', { username, password, name: 'Hanafi' });
 
 const loginUser = async (username = 'hanafi', password = 'password123') => {
   const response = await postJson('/api/v1/users/login', { username, password });
@@ -63,9 +64,10 @@ describe('basic auth middleware', () => {
   });
 });
 
-describe('bearer auth middleware', () => {
-  beforeEach(() => {
-    getDb().query('DELETE FROM users').run();
+describeDb('bearer auth middleware', () => {
+  beforeEach(async () => {
+    assertTestDatabase();
+    await getMySql().query('DELETE FROM users');
   });
 
   it('menolak request tanpa token', async () => {
@@ -95,6 +97,19 @@ describe('bearer auth middleware', () => {
 
     expect(response.status).toBe(200);
     expect(body.data.username).toBe('hanafi');
-    expect(body.data.password).toBeUndefined();
+    expect(body.data.password_hash).toBeUndefined();
+  });
+
+  it('token membawa role dan menolak akun non-admin di endpoint admin', async () => {
+    // Pendaftar pertama jadi admin (bootstrap), jadi buat admin dulu.
+    await registerUser('admin0', 'password123');
+    await registerUser();
+    const token = await loginUser();
+
+    const response = await app.request('/api/v1/users', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    expect(response.status).toBe(403);
   });
 });

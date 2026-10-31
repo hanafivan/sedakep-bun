@@ -42,6 +42,7 @@ const isStaffRole = (role: string | undefined) =>
 
 export function Dashboard() {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.username === 'admin' || user?.username === 'superadmin';
   const isStaff = isStaffRole(user?.role);
 
   const [quota, setQuota] = useState<api.Quota | null>(null);
@@ -66,7 +67,7 @@ export function Dashboard() {
     (async () => {
       try {
         const [quotaData, list] = await Promise.all([
-          api.getQuota(),
+          isAdmin ? Promise.resolve(null) : api.getQuota().catch(() => null),
           api.listLeaveRequests({ page: 1 }),
         ]);
         if (!alive) return;
@@ -81,7 +82,7 @@ export function Dashboard() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!isStaff) return;
@@ -125,7 +126,9 @@ export function Dashboard() {
           {greeting}, {firstName}
         </h1>
         <p className="greeting-subtitle">
-          Ringkasan saldo cuti dan status antrean kepegawaian Anda.
+          {isAdmin
+            ? 'Ringkasan antrean kepegawaian dan administrasi layanan.'
+            : 'Ringkasan saldo cuti dan status antrean kepegawaian Anda.'}
         </p>
       </section>
 
@@ -150,7 +153,7 @@ export function Dashboard() {
             Antrean Tugas Staf
           </h2>
           <div className="staff-queue-grid">
-            <Link className="queue-card" to="/leave?status=in_review">
+            <Link className="queue-card" to="/leave?tab=approvals">
               <span className="queue-label">Cuti Menunggu</span>
               <span className="queue-value">{summary.cuti}</span>
               <span className="queue-hint">permohonan belum final</span>
@@ -179,96 +182,98 @@ export function Dashboard() {
         </section>
       ) : null}
 
-      {/* 2. Saldo Cuti Pegawai (Hero Hijau + 3 Kartu Putih Bertumpuk) */}
-      <section className="dashboard-block quota-section" aria-labelledby="quota-heading">
-        <h2 id="quota-heading" className="block-heading">
-          Saldo Cuti Pegawai
-        </h2>
+      {/* 2. Saldo Cuti Pegawai (Hero Hijau + 3 Kartu Putih Bertumpuk) - Khusus Pegawai & Staf Non-Admin */}
+      {!isAdmin ? (
+        <section className="dashboard-block quota-section" aria-labelledby="quota-heading">
+          <h2 id="quota-heading" className="block-heading">
+            Saldo Cuti Pegawai
+          </h2>
 
-        <div className="quota-row-layout">
-          {/* Kartu Hero Hijau */}
-          <div className="quota-hero-card">
-            <div className="quota-hero-label">
-              SALDO TAHUN INI (N) · {nowYear}
-            </div>
-            <div className="quota-hero-value-wrap">
-              <span className="quota-hero-number">{quota ? quota.available.n : '-'}</span>
-              <span className="quota-hero-unit">hari</span>
-            </div>
+          <div className="quota-row-layout">
+            {/* Kartu Hero Hijau */}
+            <div className="quota-hero-card">
+              <div className="quota-hero-label">
+                SALDO TAHUN INI (N) · {nowYear}
+              </div>
+              <div className="quota-hero-value-wrap">
+                <span className="quota-hero-number">{quota ? quota.available.n : '-'}</span>
+                <span className="quota-hero-unit">hari</span>
+              </div>
 
-            <div
-              className="quota-progress-track"
-              role="progressbar"
-              aria-valuenow={availableN}
-              aria-valuemin={0}
-              aria-valuemax={officialN}
-              aria-label="Progres saldo cuti tahun ini terhadap kuota"
-            >
               <div
-                className="quota-progress-fill"
-                style={{ width: `${progressPercent}%` }}
-              />
+                className="quota-progress-track"
+                role="progressbar"
+                aria-valuenow={availableN}
+                aria-valuemin={0}
+                aria-valuemax={officialN}
+                aria-label="Progres saldo cuti tahun ini terhadap kuota"
+              >
+                <div
+                  className="quota-progress-fill"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+
+              <div className="quota-hero-meta">
+                dari kuota resmi {quota ? quota.official.n : 12} hari
+              </div>
             </div>
 
-            <div className="quota-hero-meta">
-              dari kuota resmi {quota ? quota.official.n : 12} hari
+            {/* Tiga Kartu Putih Bertumpuk */}
+            <div className="quota-stacked-cards">
+              {/* Sisa N-1 */}
+              <div className="quota-stack-card">
+                <div className="stack-card-num">
+                  {quota ? quota.available.n1 : 0}
+                </div>
+                <div className="stack-card-text">
+                  <div className="stack-card-label">
+                    SISA TAHUN LALU (N-1) · {nowYear - 1}
+                  </div>
+                  <div className="stack-card-desc">
+                    maksimum {quota?.official.n1 ?? 6} hari
+                  </div>
+                </div>
+              </div>
+
+              {/* Sisa N-2 */}
+              <div className="quota-stack-card">
+                <div className="stack-card-num">
+                  {quota ? quota.available.n2 : 0}
+                </div>
+                <div className="stack-card-text">
+                  <div className="stack-card-label">
+                    SISA DUA TAHUN LALU (N-2) · {nowYear - 2}
+                  </div>
+                  <div className="stack-card-desc">
+                    maksimum {quota?.official.n2 ?? 6} hari
+                  </div>
+                </div>
+              </div>
+
+              {/* Cuti Terpesan */}
+              <div className="quota-stack-card">
+                <div className="stack-card-num warning">
+                  {quota ? quota.reserved_days : 0}
+                </div>
+                <div className="stack-card-text">
+                  <div className="stack-card-label">CUTI TERPESAN</div>
+                  <div className="stack-card-desc">
+                    {quota ? quota.reserved_count : 0} permohonan menunggu
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Tiga Kartu Putih Bertumpuk */}
-          <div className="quota-stacked-cards">
-            {/* Sisa N-1 */}
-            <div className="quota-stack-card">
-              <div className="stack-card-num">
-                {quota ? quota.available.n1 : 0}
-              </div>
-              <div className="stack-card-text">
-                <div className="stack-card-label">
-                  SISA TAHUN LALU (N-1) · {nowYear - 1}
-                </div>
-                <div className="stack-card-desc">
-                  maksimum {quota?.official.n1 ?? 6} hari
-                </div>
-              </div>
+          {quota && !quota.eligibility.eligible ? (
+            <div className="quota-eligibility-notice">
+              <strong>Perhatian:</strong> Belum memenuhi syarat cuti tahunan: {quota.eligibility.reason}
+              {quota.eligibility.manual_validation ? ' (memerlukan validasi manual oleh admin)' : ''}
             </div>
-
-            {/* Sisa N-2 */}
-            <div className="quota-stack-card">
-              <div className="stack-card-num">
-                {quota ? quota.available.n2 : 0}
-              </div>
-              <div className="stack-card-text">
-                <div className="stack-card-label">
-                  SISA DUA TAHUN LALU (N-2) · {nowYear - 2}
-                </div>
-                <div className="stack-card-desc">
-                  maksimum {quota?.official.n2 ?? 6} hari
-                </div>
-              </div>
-            </div>
-
-            {/* Cuti Terpesan */}
-            <div className="quota-stack-card">
-              <div className="stack-card-num warning">
-                {quota ? quota.reserved_days : 0}
-              </div>
-              <div className="stack-card-text">
-                <div className="stack-card-label">CUTI TERPESAN</div>
-                <div className="stack-card-desc">
-                  {quota ? quota.reserved_count : 0} permohonan menunggu
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {quota && !quota.eligibility.eligible ? (
-          <div className="quota-eligibility-notice">
-            <strong>Perhatian:</strong> Belum memenuhi syarat cuti tahunan: {quota.eligibility.reason}
-            {quota.eligibility.manual_validation ? ' (memerlukan validasi manual oleh admin)' : ''}
-          </div>
-        ) : null}
-      </section>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* 3. Aksi Cepat: Grid 4 Kartu */}
       <section className="dashboard-block quick-actions-section" aria-labelledby="actions-heading">
@@ -327,7 +332,9 @@ export function Dashboard() {
         {/* Kartu Permohonan Cuti Terakhir */}
         <div className="history-card-wrap">
           <div className="history-card-header">
-            <h2 className="history-card-title">Permohonan Cuti Terakhir</h2>
+            <h2 className="history-card-title">
+              {isAdmin ? 'Permohonan Cuti Masuk Terakhir' : 'Permohonan Cuti Terakhir'}
+            </h2>
             <Link className="view-archive-link" to="/leave">
               <span>Lihat semua arsip</span>
               <IconArrowRight size={15} aria-hidden="true" />
@@ -346,11 +353,15 @@ export function Dashboard() {
                 </svg>
               </div>
               <p className="empty-history-text">
-                Belum ada riwayat permohonan cuti yang diajukan.
+                {isAdmin
+                  ? 'Belum ada permohonan cuti yang masuk.'
+                  : 'Belum ada riwayat permohonan cuti yang diajukan.'}
               </p>
-              <Link className="btn-primary-action" to="/leave/new">
-                Ajukan Cuti Sekarang
-              </Link>
+              {!isAdmin ? (
+                <Link className="btn-primary-action" to="/leave/new">
+                  Ajukan Cuti Sekarang
+                </Link>
+              ) : null}
             </div>
           ) : (
             <div className="history-table-container">
