@@ -53,7 +53,13 @@ export type LeaveRequest = {
   status: string;
   admin_decision: string;
   approver_1_status: string;
+  approver_1_name?: string | null;
+  approver_1_nip?: string | null;
+  approver_1_position?: string | null;
   approver_2_status: string;
+  approver_2_name?: string | null;
+  approver_2_nip?: string | null;
+  approver_2_position?: string | null;
   rejection_reason: string | null;
   letter_number?: string | null;
   letter_document_id?: number | null;
@@ -256,6 +262,9 @@ export const registerUser = (payload: {
 export const listLeaveRequests = (params: {
   status?: string;
   admin_decision?: string;
+  approver_level?: 1 | 2;
+  approver_status?: 'pending' | 'accepted' | 'rejected';
+  approver_nip?: string;
   leave_type?: string;
   year?: number;
   search?: string;
@@ -267,6 +276,20 @@ export const listLeaveRequests = (params: {
   per_page?: number;
   user_id?: number;
 }) => request<LeaveRequestList>(`/api/v1/leave-requests${buildQuery(params)}`);
+
+export type ApprovalSummary = {
+  all_pending: number;
+  atasan_1: number;
+  atasan_2: number;
+  admin: number;
+  approved: number;
+  my_pending: number;
+  my_atasan_1: number;
+  my_atasan_2: number;
+};
+
+export const getApprovalSummary = (params?: { approver_nip?: string }) =>
+  request<ApprovalSummary>(`/api/v1/leave/approvals/summary${buildQuery(params ?? {})}`);
 
 export const getLeaveRequest = (id: number) =>
   request<LeaveRequest & Record<string, unknown>>(`/api/v1/leave-requests/${id}`);
@@ -449,6 +472,17 @@ export type LeaveTypeOption = {
 
 export const getLeaveTypeOptions = () =>
   request<{ is_pppk: boolean; types: LeaveTypeOption[] }>('/api/v1/leave/types/me');
+
+export type ApproverSuggestion = {
+  id: number;
+  name: string;
+  nip: string;
+  position: string;
+  role: string;
+};
+
+export const getApproverSuggestions = (search?: string) =>
+  request<ApproverSuggestion[]>(`/api/v1/leave/approvers${buildQuery({ search })}`);
 
 export type LeaveStatistics = {
   by_status: Array<{ key: string; total: number; days: string | number }>;

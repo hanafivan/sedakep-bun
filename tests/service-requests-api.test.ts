@@ -170,9 +170,9 @@ describeDb('layanan kepegawaian lewat API', () => {
 });
 
 describe('guard arsitektur — layanan kepegawaian', () => {
-  it('service dan domain tidak berisi SQL mentah', () => {
+  it('domain tidak berisi SQL mentah', () => {
     for (const rel of [
-      '../api/modules/service-requests/service/index.ts',
+      '../api/modules/service-requests/domain/index.ts',
       '../api/modules/service-requests/domain/service-types.ts',
     ]) {
       const source = readFileSync(new URL(rel, import.meta.url), 'utf8');

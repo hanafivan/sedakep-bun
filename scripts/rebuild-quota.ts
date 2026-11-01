@@ -11,8 +11,8 @@
  * projection sebelumnya. Aman dipanggil ulang kapan saja.
  */
 import { closeMySql, getMySql } from '../api/db/mysql';
-import { getAllActiveUserIds } from '../api/modules/leave/query';
-import { rebuildQuota } from '../api/modules/leave/service/quota.service';
+import { getAllActiveUserIds } from '../api/modules/leave-requests/query';
+import { rebuildQuota } from '../api/modules/leave-quota/domain';
 
 const args = process.argv.slice(2);
 const valueOf = (flag: string): string | undefined => {

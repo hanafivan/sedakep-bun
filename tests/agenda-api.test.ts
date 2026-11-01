@@ -127,9 +127,9 @@ describeDb('agenda lewat API', () => {
 });
 
 describe('guard arsitektur — agenda', () => {
-  it('service tidak berisi SQL mentah', () => {
+  it('domain tidak berisi SQL mentah', () => {
     const source = readFileSync(
-      new URL('../api/modules/agendas/service/index.ts', import.meta.url),
+      new URL('../api/modules/agendas/domain/index.ts', import.meta.url),
       'utf8',
     );
     expect(source).not.toMatch(/\b(SELECT|INSERT|UPDATE|DELETE|CREATE TABLE|PRAGMA)\b/);

@@ -6,6 +6,7 @@ import {
   applyReservedCascade,
   computeQuota,
   detectDurationAnomaly,
+  formatMasaKerja,
   isPppkNip,
   mapToUiBuckets,
   monthsBetween,
@@ -15,7 +16,7 @@ import {
   validateEligibility,
   validateQuotaAvailability,
   type LeaveTransaction,
-} from '../api/modules/leave/domain/quota-engine';
+} from '../api/modules/leave-quota/domain/quota-engine';
 
 /** NIP PNS: lahir 19850315, TMT 201005, nomor 1001 */
 const PNS_NIP = '198503152010051001';
@@ -93,6 +94,15 @@ describe('perhitungan masa kerja', () => {
     const eligibility = validateEligibility(tmt, '2026-12-31');
     expect(eligibility.eligible).toBe(true);
     expect(eligibility.monthsWorked).toBeGreaterThan(12);
+  });
+
+  it('format masa kerja membulatkan ke tahun dan menyisakan bulan', () => {
+    expect(formatMasaKerja(213)).toBe('17 Tahun 9 Bulan');
+    expect(formatMasaKerja('213 Bulan')).toBe('17 Tahun 9 Bulan');
+    expect(formatMasaKerja(12)).toBe('1 Tahun');
+    expect(formatMasaKerja(8)).toBe('8 Bulan');
+    expect(formatMasaKerja('17 Tahun 9 Bulan')).toBe('17 Tahun 9 Bulan');
+    expect(formatMasaKerja(null, PNS_NIP, '2026-10-31')).toBe('16 Tahun 5 Bulan');
   });
 });
 

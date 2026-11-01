@@ -1,16 +1,23 @@
-import { OpenAPIHono } from '@hono/zod-openapi';
+import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { bearerAuth, type AuthUser } from '../../middleware/bearerAuth';
 import { requireRole } from '../../middleware/roleGuard';
 import { defaultHook } from '../../shared/openapi-hook';
+import { errors, json, okResponse } from '../../shared/openapi';
+import {
+  DELETE_SETTING_METHOD,
+  GET_SETTING_METHOD,
+  PUT_SETTING_METHOD,
+} from '../../shared/constant';
 import { successBody } from '../../shared/response';
 import {
-  deleteSettingRoute,
-  getSettingRoute,
-  listSettingsRoute,
-  upsertSettingRoute,
+  KeyParamSchema,
+  SettingInputSchema,
+  SettingListResponseSchema,
+  SettingSchema,
+  SettingsQuerySchema,
 } from './schema';
-import * as service from './service';
+import * as domain from './domain';
 
 /**
  * Route modul pengaturan — boundary HTTP saja, admin saja.
@@ -28,22 +35,68 @@ for (const prefix of ['/settings', '/settings/*']) {
 
 const actor = (c: Context): AuthUser => c.get('user');
 
+const listSettingsRoute = createRoute({
+  ...GET_SETTING_METHOD,
+  path: '/settings',
+  summary: 'Daftar pengaturan (admin)',
+  request: {
+    query: SettingsQuerySchema,
+  },
+  responses: {
+    ...okResponse(SettingListResponseSchema, 'Daftar pengaturan', 'SettingListResponse'),
+    ...errors([401], { 403: 'Bukan admin' }),
+  },
+});
+
+const getSettingRoute = createRoute({
+  ...GET_SETTING_METHOD,
+  path: '/settings/{key}',
+  summary: 'Detail satu pengaturan (admin)',
+  request: { params: KeyParamSchema },
+  responses: {
+    ...okResponse(SettingSchema, 'Detail pengaturan', 'SettingDetailResponse'),
+    ...errors([401, 404], { 403: 'Bukan admin' }),
+  },
+});
+
+const upsertSettingRoute = createRoute({
+  ...PUT_SETTING_METHOD,
+  path: '/settings/{key}',
+  summary: 'Simpan pengaturan (admin)',
+  request: { params: KeyParamSchema, body: json(SettingInputSchema) },
+  responses: {
+    ...okResponse(SettingSchema, 'Pengaturan disimpan', 'SettingUpsertResponse'),
+    ...errors([401, 422], { 403: 'Bukan admin' }),
+  },
+});
+
+const deleteSettingRoute = createRoute({
+  ...DELETE_SETTING_METHOD,
+  path: '/settings/{key}',
+  summary: 'Hapus pengaturan (admin)',
+  request: { params: KeyParamSchema },
+  responses: {
+    ...okResponse(z.null(), 'Pengaturan dihapus', 'SettingDeleteResponse'),
+    ...errors([401, 404], { 403: 'Bukan admin' }),
+  },
+});
+
 settingsRoutes.openapi(listSettingsRoute, async (c) => {
   const query = c.req.valid('query');
-  const items = await service.listSettings({ prefix: query.prefix, search: query.search });
+  const items = await domain.listSettings({ prefix: query.prefix, search: query.search });
   return c.json(successBody(items, 'Daftar pengaturan'), 200);
 });
 
 settingsRoutes.openapi(getSettingRoute, async (c) => {
   const { key } = c.req.valid('param');
-  const item = await service.getSetting(key);
+  const item = await domain.getSetting(key);
   return c.json(successBody(item, 'Detail pengaturan'), 200);
 });
 
 settingsRoutes.openapi(upsertSettingRoute, async (c) => {
   const { key } = c.req.valid('param');
   const body = c.req.valid('json');
-  const item = await service.setSetting(
+  const item = await domain.setSetting(
     key,
     { value: body.value, description: body.description },
     Number(actor(c).id),
@@ -53,6 +106,6 @@ settingsRoutes.openapi(upsertSettingRoute, async (c) => {
 
 settingsRoutes.openapi(deleteSettingRoute, async (c) => {
   const { key } = c.req.valid('param');
-  await service.removeSetting(key, Number(actor(c).id));
+  await domain.removeSetting(key, Number(actor(c).id));
   return c.json(successBody(null, 'Pengaturan dihapus'), 200);
 });

@@ -171,9 +171,9 @@ describeDb('disposisi lewat API', () => {
 });
 
 describe('guard arsitektur — disposisi', () => {
-  it('service tidak berisi SQL mentah', () => {
+  it('domain tidak berisi SQL mentah', () => {
     const source = readFileSync(
-      new URL('../api/modules/dispositions/service/index.ts', import.meta.url),
+      new URL('../api/modules/dispositions/domain/index.ts', import.meta.url),
       'utf8',
     );
     expect(source).not.toMatch(/\b(SELECT|INSERT|UPDATE|DELETE|CREATE TABLE|PRAGMA)\b/);

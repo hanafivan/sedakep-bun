@@ -10,14 +10,14 @@ const read = (rel: string) =>
 const SQL_PATTERN = /\b(SELECT|INSERT|UPDATE|DELETE|CREATE TABLE|PRAGMA)\b/;
 
 describe('batas modul pengaturan', () => {
-  it('service tidak berisi SQL mentah', () => {
-    expect(read('service/index.ts')).not.toMatch(SQL_PATTERN);
+  it('domain tidak berisi SQL mentah', () => {
+    expect(read('domain/index.ts')).not.toMatch(SQL_PATTERN);
   });
 
-  it('service mengakses data lewat command dan query', () => {
-    const service = read('service/index.ts');
-    expect(service).toContain("from '../command'");
-    expect(service).toContain("from '../query'");
+  it('domain mengakses data lewat command dan query', () => {
+    const domain = read('domain/index.ts');
+    expect(domain).toContain("from '../command'");
+    expect(domain).toContain("from '../query'");
   });
 
   it('command hanya berisi operasi tulis', () => {

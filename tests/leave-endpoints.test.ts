@@ -298,9 +298,9 @@ describeDb('endpoint cuti lanjutan', () => {
 });
 
 describe('guard arsitektur — modul lain tidak menumbuhkan SQL', () => {
-  it('service dokumen tidak berisi SQL mentah', () => {
+  it('domain dokumen tidak berisi SQL mentah', () => {
     const source = readFileSync(
-      new URL('../api/modules/documents/service/index.ts', import.meta.url),
+      new URL('../api/modules/documents/domain/index.ts', import.meta.url),
       'utf8',
     );
     expect(source).not.toMatch(/\b(SELECT|INSERT|UPDATE|DELETE)\b/);

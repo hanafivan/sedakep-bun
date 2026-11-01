@@ -1,7 +1,7 @@
 import { config } from '../config';
 import { insertAuditLog, upsertSettingRow } from '../modules/settings/command';
 import { findSettingByKey } from '../modules/settings/query';
-import { rolloverYear } from '../modules/leave/service';
+import { rolloverYear } from '../modules/leave-quota/domain';
 
 /**
  * Scheduler rollover kuota cuti.

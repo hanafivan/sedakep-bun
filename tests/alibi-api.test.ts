@@ -185,9 +185,9 @@ describeDb('alibi lewat API', () => {
 });
 
 describe('guard arsitektur — alibi', () => {
-  it('service tidak berisi SQL mentah', () => {
+  it('domain tidak berisi SQL mentah', () => {
     const source = readFileSync(
-      new URL('../api/modules/alibi/service/index.ts', import.meta.url),
+      new URL('../api/modules/alibi/domain/index.ts', import.meta.url),
       'utf8',
     );
     expect(source).not.toMatch(/\b(SELECT|INSERT|UPDATE|DELETE|CREATE TABLE|PRAGMA)\b/);

@@ -84,3 +84,59 @@ const gradeLabels: Record<string, string> = {
 
 export const gradeLabel = (grade: string | null | undefined): string =>
   grade ? (gradeLabels[grade] ?? grade) : '-';
+
+/**
+ * Format masa kerja: dibulatkan ke tahun terdekat kemudian disisakan bulan,
+ * misal: "17 Tahun 9 Bulan", "1 Tahun", atau "8 Bulan".
+ */
+export const formatMasaKerja = (
+  val: number | string | null | undefined,
+  nip?: string | null,
+  startDate?: string | null,
+): string => {
+  if (val && typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return '-';
+    // Format "X Tahun Y Bulan"
+    const matchYearMonth = trimmed.match(/^(\d+)\s*(?:tahun|thn|th)\s*(?:(\d+)\s*(?:bulan|bln))?$/i);
+    if (matchYearMonth && matchYearMonth[1]) {
+      const y = parseInt(matchYearMonth[1], 10);
+      const m = matchYearMonth[2] ? parseInt(matchYearMonth[2], 10) : 0;
+      if (y > 0 && m > 0) return `${y} Tahun ${m} Bulan`;
+      if (y > 0) return `${y} Tahun`;
+      return `${m} Bulan`;
+    }
+    if (trimmed.toLowerCase().includes('tahun')) return trimmed;
+
+    const parsed = parseInt(trimmed.replace(/\D/g, ''), 10);
+    if (!isNaN(parsed)) {
+      const years = Math.floor(parsed / 12);
+      const months = parsed % 12;
+      if (years > 0 && months > 0) return `${years} Tahun ${months} Bulan`;
+      if (years > 0) return `${years} Tahun`;
+      return `${months} Bulan`;
+    }
+  }
+
+  let num: number | null = typeof val === 'number' ? val : null;
+  if (num === null && nip) {
+    const clean = String(nip).replace(/\D/g, '');
+    if (clean.length === 18) {
+      const year = parseInt(clean.slice(8, 12), 10);
+      const month = parseInt(clean.slice(12, 14), 10);
+      if (year >= 1950 && year <= 2050 && month >= 1 && month <= 12) {
+        const ref = startDate ? new Date(`${String(startDate).slice(0, 10)}T00:00:00Z`) : new Date();
+        const diffYears = ref.getUTCFullYear() - year;
+        const diffMonths = (ref.getUTCMonth() + 1) - month;
+        num = Math.max(0, diffYears * 12 + diffMonths);
+      }
+    }
+  }
+
+  if (num === null || num < 0) return typeof val === 'string' && val ? val : '-';
+  const years = Math.floor(num / 12);
+  const months = num % 12;
+  if (years > 0 && months > 0) return `${years} Tahun ${months} Bulan`;
+  if (years > 0) return `${years} Tahun`;
+  return `${months} Bulan`;
+};

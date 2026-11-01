@@ -103,7 +103,7 @@ export function Riwayat() {
       {!loading && rows.length === 0 ? (
         <div className="empty-state">
           <p>Belum ada pengajuan. Mulai dari mengajukan cuti atau layanan kepegawaian.</p>
-          <Link className="button" to="/leave/new">
+          <Link className="button" to="/leave?action=new">
             Ajukan Cuti
           </Link>
         </div>

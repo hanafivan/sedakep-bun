@@ -4,6 +4,7 @@ import { Page } from '../components/Layout';
 import {
   durationUnitLabel,
   formatDate,
+  formatMasaKerja,
   gradeLabel,
   leaveStatusLabel,
   leaveStatusTone,
@@ -20,6 +21,9 @@ import {
 } from '../components/Icons';
 import { ApprovalsPanel } from './Approvals';
 import { YearPicker } from '../components/YearPicker';
+import { LeaveApplyModal } from '../components/LeaveApplyModal';
+import { LeaveFormModal } from '../components/LeaveFormModal';
+import { LeaveSkModal } from '../components/LeaveSkModal';
 
 /**
  * Hub Manajemen & Permohonan Cuti Terpadu.
@@ -73,12 +77,39 @@ export function LeaveList() {
     }
   }, [isStaff]);
 
+  // Modal state for ajukan cuti, cetak formulir, cetak sk
+  const [applyModalOpen, setApplyModalOpen] = useState(false);
+  const [formModalId, setFormModalId] = useState<number | null>(null);
+  const [skModalId, setSkModalId] = useState<number | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Deteksi jika dibuka dari luar dengan ?action=new (misal dari Dashboard)
+  useEffect(() => {
+    if (params.get('action') === 'new') {
+      setApplyModalOpen(true);
+      const next = new URLSearchParams(params);
+      next.delete('action');
+      setParams(next, { replace: true });
+    }
+  }, [params, setParams]);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
   const handleTabChange = (nextTab: string) => {
     const next = new URLSearchParams(params);
     if (nextTab === 'requests') {
       next.delete('tab');
+      next.delete('queue');
     } else {
       next.set('tab', nextTab);
+    }
+    if (nextTab !== 'approvals') {
+      next.delete('queue');
     }
     if (nextTab !== 'history') {
       next.delete('user_id');
@@ -363,6 +394,18 @@ export function LeaveList() {
     });
   };
 
+  const handleApplySuccess = (_newId: number) => {
+    setApplyModalOpen(false);
+    setToastMessage('Permohonan cuti berhasil diajukan!');
+    void loadRequests();
+    if (currentTab === 'history') {
+      void loadHistoryData();
+    }
+    if (!isAdmin) {
+      api.getQuota().then(setPersonalQuota).catch(() => {});
+    }
+  };
+
   const handleClearSelectedUser = () => {
     setSelectedUserId(null);
     setEmployeeProfile(null);
@@ -461,14 +504,18 @@ export function LeaveList() {
               <div style={{ fontSize: '13px', color: '#52796F', marginTop: '3px' }}>
                 Status: <span className={personalQuota.eligibility.eligible ? 'badge ok' : 'badge warn'}>
                   {personalQuota.eligibility.eligible ? 'Memenuhi Syarat' : 'Belum Eligible'}
-                </span> ({personalQuota.eligibility.months_worked} bulan masa kerja)
+                </span> ({formatMasaKerja(personalQuota.eligibility.months_worked)} masa kerja)
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <Link to="/leave/new" className="button small">
+              <button
+                type="button"
+                className="button small"
+                onClick={() => setApplyModalOpen(true)}
+              >
                 <IconCalendarPlus size={16} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
                 Ajukan Cuti Baru
-              </Link>
+              </button>
               <Link to="/quota/print/me" target="_blank" className="button secondary small">
                 <IconFileText size={16} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
                 Cetak Buku Cuti
@@ -656,7 +703,7 @@ export function LeaveList() {
                         <span>
                           {' '}· Status: <span className={historyQuota.eligibility.eligible ? 'badge ok' : 'badge warn'}>
                             {historyQuota.eligibility.eligible ? 'Eligible' : 'Belum Eligible'}
-                          </span> ({historyQuota.eligibility.months_worked} bulan masa kerja)
+                          </span> ({formatMasaKerja(historyQuota.eligibility.months_worked)} masa kerja)
                         </span>
                       ) : null}
                     </div>
@@ -923,25 +970,25 @@ export function LeaveList() {
                                         + SK
                                       </Link>
                                     ) : null}
-                                    <Link
-                                      to={`/leave/${item.id}/print-form`}
-                                      target="_blank"
+                                    <button
+                                      type="button"
+                                      onClick={() => setFormModalId(item.id)}
                                       className="button small secondary"
                                       style={{ height: '28px', padding: '0 7px', fontSize: '11.5px' }}
-                                      title="Cetak Formulir Permohonan Cuti"
+                                      title="Pratinjau & Cetak Formulir Cuti"
                                     >
                                       Form
-                                    </Link>
+                                    </button>
                                     {item.letter_number ? (
-                                      <Link
-                                        to={`/leave/${item.id}/print`}
-                                        target="_blank"
+                                      <button
+                                        type="button"
+                                        onClick={() => setSkModalId(item.id)}
                                         className="button small secondary"
                                         style={{ height: '28px', padding: '0 7px', fontSize: '11.5px' }}
-                                        title="Cetak Surat Keterangan Cuti"
+                                        title="Pratinjau & Cetak Surat Keterangan Cuti"
                                       >
                                         SK
-                                      </Link>
+                                      </button>
                                     ) : null}
                                   </div>
                                 </td>
@@ -1226,10 +1273,10 @@ export function LeaveList() {
                 </button>
               ) : null}
 
-              <Link className="button" to="/leave/new">
+              <button type="button" className="button" onClick={() => setApplyModalOpen(true)}>
                 <IconCalendarPlus size={16} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
                 Ajukan Cuti
-              </Link>
+              </button>
             </div>
           </div>
 
@@ -1244,10 +1291,10 @@ export function LeaveList() {
                     <IconFileText size={28} />
                   </div>
                   <p>Tidak ada data permohonan cuti yang sesuai dengan filter ini.</p>
-                  <Link className="button" to="/leave/new">
+                  <button type="button" className="button" onClick={() => setApplyModalOpen(true)}>
                     <IconCalendarPlus size={18} />
                     <span>Ajukan Cuti Baru</span>
-                  </Link>
+                  </button>
                 </div>
               ) : (
                 <div className="table-wrap" style={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
@@ -1397,26 +1444,26 @@ export function LeaveList() {
                                 </Link>
                               ) : null}
                               {item.admin_decision === 'accepted' ? (
-                                <Link
+                                <button
+                                  type="button"
                                   className="button small secondary"
-                                  to={`/leave/${item.id}/print-form`}
-                                  target="_blank"
+                                  onClick={() => setFormModalId(item.id)}
                                   style={{ height: '28px', padding: '0 7px', fontSize: '11.5px' }}
-                                  title="Cetak Formulir Permohonan Cuti"
+                                  title="Pratinjau & Cetak Formulir Cuti"
                                 >
                                   Form
-                                </Link>
+                                </button>
                               ) : null}
                               {item.letter_number ? (
-                                <Link
+                                <button
+                                  type="button"
                                   className="button small secondary"
-                                  to={`/leave/${item.id}/print`}
-                                  target="_blank"
+                                  onClick={() => setSkModalId(item.id)}
                                   style={{ height: '28px', padding: '0 7px', fontSize: '11.5px' }}
-                                  title="Cetak Surat Keterangan Cuti"
+                                  title="Pratinjau & Cetak Surat Keterangan Cuti"
                                 >
                                   SK
-                                </Link>
+                                </button>
                               ) : null}
                             </div>
                           </td>
@@ -1479,6 +1526,33 @@ export function LeaveList() {
             </>
           ) : null}
         </>
+      ) : null}
+
+      <LeaveApplyModal
+        isOpen={applyModalOpen}
+        onClose={() => setApplyModalOpen(false)}
+        onSuccess={handleApplySuccess}
+      />
+
+      <LeaveFormModal
+        requestId={formModalId}
+        isOpen={formModalId !== null}
+        onClose={() => setFormModalId(null)}
+      />
+
+      <LeaveSkModal
+        requestId={skModalId}
+        isOpen={skModalId !== null}
+        onClose={() => setSkModalId(null)}
+      />
+
+      {toastMessage ? (
+        <div className="app-toast-container">
+          <div className="app-toast success">
+            <span>✓</span>
+            <span>{toastMessage}</span>
+          </div>
+        </div>
       ) : null}
     </Page>
   );

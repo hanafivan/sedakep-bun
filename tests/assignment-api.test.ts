@@ -241,9 +241,9 @@ describeDb('surat tugas lewat API', () => {
 });
 
 describe('guard arsitektur — surat tugas', () => {
-  it('service tidak berisi SQL mentah', () => {
+  it('domain tidak berisi SQL mentah', () => {
     const source = readFileSync(
-      new URL('../api/modules/assignments/service/index.ts', import.meta.url),
+      new URL('../api/modules/assignments/domain/index.ts', import.meta.url),
       'utf8',
     );
     expect(source).not.toMatch(/\b(SELECT|INSERT|UPDATE|DELETE|CREATE TABLE|PRAGMA)\b/);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import * as api from '../api';
-import { durationUnitLabel, formatDate, gradeLabel } from '../format';
+import { durationUnitLabel, formatDate, formatMasaKerja, gradeLabel } from '../format';
 
 /**
  * Halaman verifikasi dokumen QR publik (tanpa login).
@@ -282,8 +282,79 @@ export function Verify() {
 
       {/* HALAMAN FORMULIR LENGKAP */}
       <div className="print-wrap" style={{ maxWidth: '820px', margin: '24px auto 48px', padding: '0 16px' }}>
-        <div className="print-sheet" style={{ background: '#ffffff', padding: '36px 40px', borderRadius: '8px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', fontSize: '10pt', lineHeight: 1.35, color: '#000000' }}>
-          <div style={{ textAlign: 'right', fontSize: '9pt', marginBottom: '12px', lineHeight: 1.3 }}>
+        <style>{`
+          @page {
+            size: A4 portrait;
+            margin: 6mm 10mm 4mm 10mm;
+          }
+          @media print {
+            html, body {
+              width: 100% !important;
+              height: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              overflow: hidden !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .modal-backdrop, .verify-topbar, .print-toolbar {
+              display: none !important;
+            }
+            .print-wrap {
+              padding: 0 !important;
+              margin: 0 !important;
+              max-width: 100% !important;
+              width: 100% !important;
+            }
+            .print-sheet {
+              padding: 0 !important;
+              margin: 0 !important;
+              box-shadow: none !important;
+              border: none !important;
+              max-width: 100% !important;
+              width: 100% !important;
+              font-size: 8pt !important;
+              line-height: 1.15 !important;
+            }
+            .print-table {
+              margin-bottom: 2.5px !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+            .print-table th,
+            .print-table td {
+              padding: 1.5px 3.5px !important;
+              font-size: 8pt !important;
+              line-height: 1.15 !important;
+            }
+            .print-qr-img {
+              width: 36px !important;
+              height: 36px !important;
+            }
+            .print-qr-box {
+              height: 38px !important;
+              margin: 1px auto !important;
+            }
+          }
+          .print-table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            border: 1px solid #000 !important;
+          }
+          .print-table th,
+          .print-table td {
+            border: 1px solid #000 !important;
+            padding: 2px 4px !important;
+          }
+          .print-table tr:last-child td,
+          .print-table tbody tr:last-child td,
+          .print-table tr:last-child th,
+          .print-table tbody tr:last-child th {
+            border-bottom: 1px solid #000 !important;
+          }
+        `}</style>
+        <div className="print-sheet" style={{ background: '#ffffff', padding: '24px 28px', borderRadius: '8px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', fontSize: '8.5pt', lineHeight: 1.2, color: '#000000' }}>
+          <div style={{ textAlign: 'right', fontSize: '7.5pt', marginBottom: '4px', lineHeight: 1.15 }}>
             <strong>ANAK LAMPIRAN 1.b</strong><br />
             PERATURAN BADAN KEPEGAWAIAN NEGARA REPUBLIK INDONESIA<br />
             NOMOR 24 TAHUN 2017<br />
@@ -294,14 +365,14 @@ export function Verify() {
             Di Sleman
           </div>
 
-          <h2 style={{ textAlign: 'center', fontSize: '11.5pt', margin: '8px 0 10px', fontWeight: 'bold' }}>
-            <span style={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>
+          <h2 style={{ textAlign: 'center', fontSize: '10pt', margin: '2px 0 4px', fontWeight: 'bold' }}>
+            <span style={{ textDecoration: 'underline', textUnderlineOffset: '2px' }}>
               FORMULIR PERMINTAAN DAN PEMBERIAN CUTI
             </span>
           </h2>
 
           {/* I. DATA PEGAWAI */}
-          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '9.5pt' }}>
+          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '3px', fontSize: '8.5pt' }}>
             <tbody>
               <tr style={{ background: '#f5f5f5' }}>
                 <th colSpan={4} style={{ border: '1px solid #333', padding: '4px 6px' }}><strong>I. DATA PEGAWAI</strong></th>
@@ -316,7 +387,13 @@ export function Verify() {
                 <td style={{ border: '1px solid #333', padding: '4px 6px' }}><strong>Jabatan</strong></td>
                 <td style={{ border: '1px solid #333', padding: '4px 6px' }}>{String(raw.position || '-')}</td>
                 <td style={{ border: '1px solid #333', padding: '4px 6px' }}><strong>Masa Kerja</strong></td>
-                <td style={{ border: '1px solid #333', padding: '4px 6px' }}>{String(raw.service_years || '-')}</td>
+                <td style={{ border: '1px solid #333', padding: '4px 6px' }}>
+                  {formatMasaKerja(
+                    (raw.service_years as string) || (raw.masa_kerja as string) || (raw.months_worked as number),
+                    String(raw.nip || ''),
+                    String(raw.start_date || ''),
+                  )}
+                </td>
               </tr>
               <tr>
                 <td style={{ border: '1px solid #333', padding: '4px 6px' }}><strong>Unit Kerja</strong></td>
@@ -426,18 +503,21 @@ export function Verify() {
           </table>
 
           {/* VI. ALAMAT SELAMA MENJALANKAN CUTI */}
-          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '9.5pt' }}>
+          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '5px', fontSize: '9pt' }}>
             <tbody>
               <tr style={{ background: '#f5f5f5' }}>
                 <th colSpan={2} style={{ border: '1px solid #333', padding: '4px 6px' }}><strong>VI. ALAMAT SELAMA MENJALANKAN CUTI</strong></th>
               </tr>
               <tr>
-                <td style={{ border: '1px solid #333', padding: '8px', width: '55%', verticalAlign: 'top' }}>
+                <td style={{ border: '1px solid #333', padding: '6px', width: '55%', verticalAlign: 'top' }}>
                   {String(raw.address || '-')}<br />
                   <strong>Telp:</strong> {String(raw.phone || '-')}
                 </td>
-                <td style={{ border: '1px solid #333', width: '45%', textAlign: 'center', verticalAlign: 'top', padding: '12px 6px' }}>
-                  Hormat saya,<br /><br /><br /><br />
+                <td style={{ border: '1px solid #333', width: '45%', textAlign: 'center', verticalAlign: 'top', padding: '6px' }}>
+                  Hormat saya,
+                  <div className="print-qr-box" style={{ margin: '1px auto', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <img className="print-qr-img" src={`/api/v1/verify/${code}/qr`} alt="QR Verifikasi" style={{ width: '36px', height: '36px', display: 'block' }} />
+                  </div>
                   <u><strong>{String(raw.name || data.name || '-')}</strong></u><br />
                   NIP. {String(raw.nip || '-')}
                 </td>
@@ -446,7 +526,7 @@ export function Verify() {
           </table>
 
           {/* VII. PERTIMBANGAN ATASAN LANGSUNG */}
-          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '9.5pt' }}>
+          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '5px', fontSize: '9pt' }}>
             <tbody>
               <tr style={{ background: '#f5f5f5' }}>
                 <th colSpan={4} style={{ border: '1px solid #333', padding: '4px 6px' }}><strong>VII. PERTIMBANGAN ATASAN LANGSUNG**</strong></th>
@@ -457,18 +537,21 @@ export function Verify() {
                 <td style={{ border: '1px solid #333', padding: '4px 6px', width: '25%', textAlign: 'center' }}>DITANGGUHKAN</td>
                 <td style={{ border: '1px solid #333', padding: '4px 6px', width: '25%', textAlign: 'center' }}>TIDAK DISETUJUI</td>
               </tr>
-              <tr style={{ height: '24px', textAlign: 'center', fontWeight: 'bold' }}>
+              <tr style={{ height: '22px', textAlign: 'center', fontWeight: 'bold' }}>
                 <td style={{ border: '1px solid #333' }}>{raw.approver_1_status === 'accepted' || raw.admin_decision === 'accepted' ? '✓' : ''}</td>
                 <td style={{ border: '1px solid #333' }}></td>
                 <td style={{ border: '1px solid #333' }}></td>
                 <td style={{ border: '1px solid #333' }}>{raw.approver_1_status === 'rejected' ? '✓' : ''}</td>
               </tr>
               <tr>
-                <td colSpan={2} style={{ border: '1px solid #333', verticalAlign: 'top', padding: '8px 10px', fontSize: '9pt', color: '#555' }}>
+                <td colSpan={2} style={{ border: '1px solid #333', verticalAlign: 'top', padding: '6px 8px', fontSize: '8.5pt', color: '#555' }}>
                   Catatan / Keterangan:
                 </td>
-                <td colSpan={2} style={{ border: '1px solid #333', textAlign: 'center', verticalAlign: 'top', padding: '10px 6px' }}>
-                  {approver1Pos}<br /><br /><br /><br />
+                <td colSpan={2} style={{ border: '1px solid #333', textAlign: 'center', verticalAlign: 'top', padding: '6px' }}>
+                  {approver1Pos}
+                  <div className="print-qr-box" style={{ margin: '1px auto', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <img className="print-qr-img" src={`/api/v1/verify/${code}/qr`} alt="QR Verifikasi" style={{ width: '36px', height: '36px', display: 'block' }} />
+                  </div>
                   <u><strong>{approver1Name}</strong></u><br />
                   NIP. {approver1Nip}
                 </td>
@@ -477,7 +560,7 @@ export function Verify() {
           </table>
 
           {/* VIII. KEPUTUSAN PEJABAT BERWENANG */}
-          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '8px', fontSize: '9.5pt' }}>
+          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '5px', fontSize: '9pt' }}>
             <tbody>
               <tr style={{ background: '#f5f5f5' }}>
                 <th colSpan={4} style={{ border: '1px solid #333', padding: '4px 6px' }}><strong>VIII. KEPUTUSAN PEJABAT YANG BERWENANG MEMBERIKAN CUTI**</strong></th>
@@ -488,18 +571,21 @@ export function Verify() {
                 <td style={{ border: '1px solid #333', padding: '4px 6px', width: '25%', textAlign: 'center' }}>DITANGGUHKAN</td>
                 <td style={{ border: '1px solid #333', padding: '4px 6px', width: '25%', textAlign: 'center' }}>TIDAK DISETUJUI</td>
               </tr>
-              <tr style={{ height: '24px', textAlign: 'center', fontWeight: 'bold' }}>
+              <tr style={{ height: '22px', textAlign: 'center', fontWeight: 'bold' }}>
                 <td style={{ border: '1px solid #333' }}>{raw.approver_2_status === 'accepted' || raw.admin_decision === 'accepted' ? '✓' : ''}</td>
                 <td style={{ border: '1px solid #333' }}></td>
                 <td style={{ border: '1px solid #333' }}></td>
                 <td style={{ border: '1px solid #333' }}>{raw.approver_2_status === 'rejected' ? '✓' : ''}</td>
               </tr>
               <tr>
-                <td colSpan={2} style={{ border: '1px solid #333', verticalAlign: 'top', padding: '8px 10px', fontSize: '9pt', color: '#555' }}>
+                <td colSpan={2} style={{ border: '1px solid #333', verticalAlign: 'top', padding: '6px 8px', fontSize: '8.5pt', color: '#555' }}>
                   Catatan / Keterangan:
                 </td>
-                <td colSpan={2} style={{ border: '1px solid #333', textAlign: 'center', verticalAlign: 'top', padding: '10px 6px' }}>
-                  {approver2Pos}<br /><br /><br /><br />
+                <td colSpan={2} style={{ border: '1px solid #333', textAlign: 'center', verticalAlign: 'top', padding: '6px' }}>
+                  {approver2Pos}
+                  <div className="print-qr-box" style={{ margin: '1px auto', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <img className="print-qr-img" src={`/api/v1/verify/${code}/qr`} alt="QR Verifikasi" style={{ width: '36px', height: '36px', display: 'block' }} />
+                  </div>
                   <u><strong>{approver2Name}</strong></u><br />
                   NIP. {approver2Nip}
                 </td>
@@ -507,7 +593,7 @@ export function Verify() {
             </tbody>
           </table>
 
-          <div style={{ fontSize: '8pt', color: '#555', marginTop: '6px', lineHeight: 1.3 }}>
+          <div style={{ fontSize: '6.5pt', color: '#555', marginTop: '2px', lineHeight: 1.15 }}>
             <em>
               Catatan:<br />
               * Coret yang tidak perlu | ** Pilih salah satu dengan memberi tanda centang (✓)<br />
@@ -516,13 +602,8 @@ export function Verify() {
             </em>
           </div>
 
-          <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px', borderTop: '1px dashed #cbd5e1', paddingTop: '12px' }}>
-            <img src={`/api/v1/verify/${code}/qr`} alt="QR Verifikasi" style={{ width: '64px', height: '64px', border: '1px solid #e2e8f0', borderRadius: '4px' }} />
-            <div style={{ fontSize: '8pt', color: '#475569' }}>
-              <strong>Tanda Tangan Elektronik & Verifikasi Keaslian</strong><br />
-              Dokumen ini dinyatakan sah dan terdaftar resmi pada Sistem Informasi Kepegawaian SEDAKEP.<br />
-              Kode Verifikasi: <code style={{ fontSize: '8pt', background: '#f1f5f9', padding: '1px 4px' }}>{code}</code>
-            </div>
+          <div style={{ marginTop: '2px', color: '#334155', fontStyle: 'italic', borderTop: '0.5px dashed #cbd5e1', paddingTop: '2px', fontSize: '6.5pt' }}>
+            Permohonan ini sudah dilakukan dan diverifikasi melalui aplikasi SEDAKEP oleh Kantor Kementerian Agama Kab. Sleman.
           </div>
         </div>
       </div>

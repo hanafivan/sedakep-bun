@@ -1,34 +1,6 @@
-import { z } from 'zod';
-import { createRoute } from '@hono/zod-openapi';
+import { z } from '@hono/zod-openapi';
 
 /** Master data: organisasi/unit kerja dan jabatan. */
-
-export const ApiErrorSchema = z
-  .object({
-    success: z.literal(false),
-    data: z.null(),
-    message: z.string(),
-    code: z.number(),
-    details: z.any().optional(),
-  })
-  .openapi('MasterApiError');
-
-const ok = <T extends z.ZodTypeAny>(data: T, name: string) =>
-  z
-    .object({ success: z.literal(true), data, message: z.string(), code: z.number() })
-    .openapi(name);
-
-const json = <T extends z.ZodTypeAny>(schema: T) => ({
-  content: { 'application/json': { schema } },
-});
-
-const errorResponses = (descriptions: Record<number, string>) =>
-  Object.fromEntries(
-    Object.entries(descriptions).map(([code, description]) => [
-      Number(code),
-      { description, content: { 'application/json': { schema: ApiErrorSchema } } },
-    ]),
-  );
 
 export const OrganizationSchema = z
   .object({
@@ -68,111 +40,17 @@ export const PositionInputSchema = z
   })
   .openapi('PositionInput');
 
-const IdParam = z.object({ id: z.coerce.number().int().positive() });
+export const IdParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
-export const listOrganizationsRoute = createRoute({
-  method: 'get',
-  path: '/organizations',
-  tags: ['Master'],
-  summary: 'Daftar organisasi/unit kerja',
-  security: [{ bearerAuth: [] }],
-  request: { query: z.object({ search: z.string().optional(), active_only: z.string().optional() }) },
-  responses: {
-    200: {
-      description: 'Daftar organisasi',
-      ...json(ok(z.array(OrganizationSchema), 'OrganizationListResponse')),
-    },
-    ...errorResponses({ 401: 'Token tidak valid' }),
-  },
+export const MasterQuerySchema = z.object({
+  search: z.string().optional(),
+  active_only: z.string().optional(),
 });
 
-export const createOrganizationRoute = createRoute({
-  method: 'post',
-  path: '/organizations',
-  tags: ['Master'],
-  summary: 'Tambah organisasi (admin)',
-  security: [{ bearerAuth: [] }],
-  request: { body: json(OrganizationInputSchema) },
-  responses: {
-    200: { description: 'Organisasi dibuat', ...json(ok(z.record(z.any()), 'OrganizationCreateResponse')) },
-    ...errorResponses({ 401: 'Token tidak valid', 403: 'Bukan admin', 422: 'Validasi gagal' }),
-  },
-});
+export const OrganizationListResponseSchema = z.array(OrganizationSchema).openapi('OrganizationListResponse');
+export const OrganizationCreateResponseSchema = z.record(z.any()).openapi('OrganizationCreateResponse');
+export const OrganizationUpdateResponseSchema = z.record(z.any()).openapi('OrganizationUpdateResponse');
+export const PositionListResponseSchema = z.array(PositionSchema).openapi('PositionListResponse');
+export const PositionCreateResponseSchema = z.record(z.any()).openapi('PositionCreateResponse');
+export const PositionUpdateResponseSchema = z.record(z.any()).openapi('PositionUpdateResponse');
 
-export const updateOrganizationRoute = createRoute({
-  method: 'patch',
-  path: '/organizations/{id}',
-  tags: ['Master'],
-  summary: 'Ubah organisasi (admin)',
-  security: [{ bearerAuth: [] }],
-  request: { params: IdParam, body: json(OrganizationInputSchema.partial()) },
-  responses: {
-    200: { description: 'Organisasi diperbarui', ...json(ok(z.record(z.any()), 'OrganizationUpdateResponse')) },
-    ...errorResponses({ 401: 'Token tidak valid', 403: 'Bukan admin', 404: 'Tidak ditemukan' }),
-  },
-});
-
-export const deleteOrganizationRoute = createRoute({
-  method: 'delete',
-  path: '/organizations/{id}',
-  tags: ['Master'],
-  summary: 'Hapus organisasi (admin)',
-  security: [{ bearerAuth: [] }],
-  request: { params: IdParam },
-  responses: {
-    200: { description: 'Organisasi dihapus', ...json(ok(z.null(), 'OrganizationDeleteResponse')) },
-    ...errorResponses({ 401: 'Token tidak valid', 403: 'Bukan admin', 404: 'Tidak ditemukan' }),
-  },
-});
-
-export const listPositionsRoute = createRoute({
-  method: 'get',
-  path: '/positions',
-  tags: ['Master'],
-  summary: 'Daftar jabatan',
-  security: [{ bearerAuth: [] }],
-  request: { query: z.object({ search: z.string().optional(), active_only: z.string().optional() }) },
-  responses: {
-    200: { description: 'Daftar jabatan', ...json(ok(z.array(PositionSchema), 'PositionListResponse')) },
-    ...errorResponses({ 401: 'Token tidak valid' }),
-  },
-});
-
-export const createPositionRoute = createRoute({
-  method: 'post',
-  path: '/positions',
-  tags: ['Master'],
-  summary: 'Tambah jabatan (admin)',
-  security: [{ bearerAuth: [] }],
-  request: { body: json(PositionInputSchema) },
-  responses: {
-    200: { description: 'Jabatan dibuat', ...json(ok(z.record(z.any()), 'PositionCreateResponse')) },
-    ...errorResponses({ 401: 'Token tidak valid', 403: 'Bukan admin', 422: 'Validasi gagal' }),
-  },
-});
-
-export const updatePositionRoute = createRoute({
-  method: 'patch',
-  path: '/positions/{id}',
-  tags: ['Master'],
-  summary: 'Ubah jabatan (admin)',
-  security: [{ bearerAuth: [] }],
-  request: { params: IdParam, body: json(PositionInputSchema.partial()) },
-  responses: {
-    200: { description: 'Jabatan diperbarui', ...json(ok(z.record(z.any()), 'PositionUpdateResponse')) },
-    ...errorResponses({ 401: 'Token tidak valid', 403: 'Bukan admin', 404: 'Tidak ditemukan' }),
-  },
-});
-
-export const deletePositionRoute = createRoute({
-  method: 'delete',
-  path: '/positions/{id}',
-  tags: ['Master'],
-  summary: 'Hapus jabatan (admin)',
-  security: [{ bearerAuth: [] }],
-  request: { params: IdParam },
-  responses: {
-    200: { description: 'Jabatan dihapus', ...json(ok(z.null(), 'PositionDeleteResponse')) },
-    ...errorResponses({ 401: 'Token tidak valid', 403: 'Bukan admin', 404: 'Tidak ditemukan' }),
-  },
-});

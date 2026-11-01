@@ -71,6 +71,8 @@ describe('dokumentasi OpenAPI', () => {
       '/api/v1/leave/admin/quota-book',
       '/api/v1/leave/admin/users',
       '/api/v1/leave/admin/yearly-summary',
+      '/api/v1/leave/approvals/summary',
+      '/api/v1/leave/approvers',
       '/api/v1/leave/legacy-history',
       '/api/v1/leave/letters',
       '/api/v1/leave/letters/{id}/file',
@@ -135,6 +137,14 @@ describe('dokumentasi OpenAPI', () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('swagger');
+  });
+
+  it('menampilkan multipart upload dokumen dengan file binary', async () => {
+    const spec = await json(await app.request('/openapi.json'));
+    const uploadRoute = spec.paths['/api/v1/documents'].post;
+    const schema = uploadRoute.requestBody.content['multipart/form-data'].schema;
+    expect(schema.properties.file.type).toBe('string');
+    expect(schema.properties.file.format).toBe('binary');
   });
 
   it('mengembalikan 404 JSON untuk path API yang tidak ada', async () => {

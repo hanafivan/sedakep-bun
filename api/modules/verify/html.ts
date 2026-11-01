@@ -13,6 +13,53 @@ const formatIdDate = (val?: string | null): string => {
   return `${d}/${m}/${y}`;
 };
 
+const formatMasaKerja = (val: any, nip?: string | null, startDate?: string | null): string => {
+  if (val && typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return '-';
+    const matchYearMonth = trimmed.match(/^(\d+)\s*(?:tahun|thn|th)\s*(?:(\d+)\s*(?:bulan|bln))?$/i);
+    if (matchYearMonth && matchYearMonth[1]) {
+      const y = parseInt(matchYearMonth[1], 10);
+      const m = matchYearMonth[2] ? parseInt(matchYearMonth[2], 10) : 0;
+      if (y > 0 && m > 0) return `${y} Tahun ${m} Bulan`;
+      if (y > 0) return `${y} Tahun`;
+      return `${m} Bulan`;
+    }
+    if (trimmed.toLowerCase().includes('tahun')) return trimmed;
+
+    const parsed = parseInt(trimmed.replace(/\D/g, ''), 10);
+    if (!isNaN(parsed)) {
+      const years = Math.floor(parsed / 12);
+      const months = parsed % 12;
+      if (years > 0 && months > 0) return `${years} Tahun ${months} Bulan`;
+      if (years > 0) return `${years} Tahun`;
+      return `${months} Bulan`;
+    }
+  }
+
+  let num: number | null = typeof val === 'number' ? val : null;
+  if (num === null && nip) {
+    const clean = String(nip).replace(/\D/g, '');
+    if (clean.length === 18) {
+      const year = parseInt(clean.slice(8, 12), 10);
+      const month = parseInt(clean.slice(12, 14), 10);
+      if (year >= 1950 && year <= 2050 && month >= 1 && month <= 12) {
+        const ref = startDate ? new Date(`${String(startDate).slice(0, 10)}T00:00:00Z`) : new Date();
+        const diffYears = ref.getUTCFullYear() - year;
+        const diffMonths = (ref.getUTCMonth() + 1) - month;
+        num = Math.max(0, diffYears * 12 + diffMonths);
+      }
+    }
+  }
+
+  if (num === null || num < 0) return typeof val === 'string' && val ? val : '-';
+  const years = Math.floor(num / 12);
+  const months = num % 12;
+  if (years > 0 && months > 0) return `${years} Tahun ${months} Bulan`;
+  if (years > 0) return `${years} Tahun`;
+  return `${months} Bulan`;
+};
+
 export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: string): string => {
   const isChecked = (match: string) =>
     (data.leave_type || '').toLowerCase().includes(match.toLowerCase()) ? '✓' : '';
@@ -112,28 +159,47 @@ export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: stri
     }
     .print-sheet {
       background: #ffffff;
-      padding: 36px 40px;
+      padding: 24px 28px;
       border-radius: 8px;
       box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-      font-size: 10pt;
-      line-height: 1.35;
+      font-size: 8.5pt;
+      line-height: 1.2;
       color: #000000;
     }
 
     .print-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 8px;
-      font-size: 9.5pt;
+      margin-bottom: 2.5px;
+      font-size: 8.5pt;
+      border: 1px solid #000000 !important;
     }
     .print-table th, .print-table td {
-      border: 1px solid #000000;
-      padding: 4px 6px;
+      border: 1px solid #000000 !important;
+      padding: 2px 4px;
       vertical-align: middle;
+    }
+    .print-table tr:last-child td,
+    .print-table tbody tr:last-child td,
+    .print-table tr:last-child th,
+    .print-table tbody tr:last-child th {
+      border-bottom: 1px solid #000000 !important;
     }
     .print-table th {
       background-color: #f5f5f5;
       text-align: left;
+    }
+    .print-qr-img {
+      width: 36px;
+      height: 36px;
+      display: block;
+    }
+    .print-qr-box {
+      height: 38px;
+      margin: 1px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     /* Modal Backdrop & Popup */
@@ -265,21 +331,62 @@ export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: stri
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
+    @page {
+      size: A4 portrait;
+      margin: 6mm 10mm 4mm 10mm;
+    }
     @media print {
+      html, body {
+        width: 100% !important;
+        height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        overflow: hidden !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
       .verify-topbar, .modal-backdrop {
         display: none !important;
       }
-      body {
-        background: #ffffff;
-      }
       .print-wrap {
-        margin: 0;
-        padding: 0;
-        max-width: none;
+        margin: 0 !important;
+        padding: 0 !important;
+        max-width: none !important;
+        width: 100% !important;
       }
       .print-sheet {
-        padding: 0;
-        box-shadow: none;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        width: 100% !important;
+        font-size: 8pt !important;
+        line-height: 1.15 !important;
+      }
+      .print-table {
+        margin-bottom: 2.5px !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .print-table th, .print-table td {
+        padding: 1.5px 3.5px !important;
+        font-size: 8pt !important;
+        line-height: 1.15 !important;
+      }
+      .print-table tr:last-child td,
+      .print-table tbody tr:last-child td,
+      .print-table tr:last-child th,
+      .print-table tbody tr:last-child th {
+        border-bottom: 1px solid #000000 !important;
+      }
+      .print-qr-img {
+        width: 36px !important;
+        height: 36px !important;
+      }
+      .print-qr-box {
+        height: 38px !important;
+        margin: 1px auto !important;
       }
     }
   </style>
@@ -349,7 +456,7 @@ export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: stri
   <!-- HALAMAN FORMULIR LENGKAP -->
   <div class="print-wrap">
     <div class="print-sheet">
-      <div style="text-align: right; font-size: 9pt; margin-bottom: 12px; line-height: 1.3;">
+      <div style="text-align: right; font-size: 7.5pt; margin-bottom: 4px; line-height: 1.15;">
         <strong>ANAK LAMPIRAN 1.b</strong><br>
         PERATURAN BADAN KEPEGAWAIAN NEGARA REPUBLIK INDONESIA<br>
         NOMOR 24 TAHUN 2017<br>
@@ -360,8 +467,8 @@ export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: stri
         Di Sleman
       </div>
 
-      <h2 style="text-align: center; font-size: 11.5pt; margin: 8px 0 10px; font-weight: bold;">
-        <span style="text-decoration: underline; text-underline-offset: 3px;">
+      <h2 style="text-align: center; font-size: 10pt; margin: 2px 0 4px; fontWeight: bold;">
+        <span style="text-decoration: underline; text-underline-offset: 2px;">
           FORMULIR PERMINTAAN DAN PEMBERIAN CUTI
         </span>
       </h2>
@@ -382,7 +489,7 @@ export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: stri
             <td><strong>Jabatan</strong></td>
             <td>${escapeHtml(data.position || '-')}</td>
             <td><strong>Masa Kerja</strong></td>
-            <td>${escapeHtml(data.service_years || '-')}</td>
+            <td>${escapeHtml(formatMasaKerja(data.service_years || data.masa_kerja, data.nip, data.start_date))}</td>
           </tr>
           <tr>
             <td><strong>Unit Kerja</strong></td>
@@ -498,12 +605,15 @@ export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: stri
             <th colspan="2"><strong>VI. ALAMAT SELAMA MENJALANKAN CUTI</strong></th>
           </tr>
           <tr>
-            <td style="width: 55%; vertical-align: top; padding: 8px;">
+            <td style="width: 55%; vertical-align: top; padding: 4px;">
               ${escapeHtml(data.address || '-')}<br>
               <strong>Telp:</strong> ${escapeHtml(data.phone || '-')}
             </td>
-            <td style="width: 45%; text-align: center; vertical-align: top; padding: 12px 6px;">
-              Hormat saya,<br><br><br><br>
+            <td style="width: 45%; text-align: center; vertical-align: top; padding: 4px;">
+              Hormat saya,
+              <div class="print-qr-box" style="margin: 1px auto; height: 38px; display: flex; align-items: center; justify-content: center;">
+                <img class="print-qr-img" src="/api/v1/verify/${code}/qr" alt="QR Verifikasi" style="width: 36px; height: 36px; display: block;">
+              </div>
               <u><strong>${escapeHtml(data.name)}</strong></u><br>
               NIP. ${escapeHtml(data.nip || '-')}
             </td>
@@ -523,18 +633,21 @@ export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: stri
             <td style="width: 25%; text-align: center;">DITANGGUHKAN</td>
             <td style="width: 25%; text-align: center;">TIDAK DISETUJUI</td>
           </tr>
-          <tr style="height: 24px; text-align: center; font-weight: bold;">
+          <tr style="height: 18px; text-align: center; font-weight: bold;">
             <td>${data.approver_1_status === 'accepted' || data.admin_decision === 'accepted' ? '✓' : ''}</td>
             <td></td>
             <td></td>
             <td>${data.approver_1_status === 'rejected' ? '✓' : ''}</td>
           </tr>
           <tr>
-            <td colspan="2" style="vertical-align: top; padding: 8px 10px; font-size: 9pt; color: #555;">
+            <td colspan="2" style="vertical-align: top; padding: 4px 6px; font-size: 8pt; color: #555;">
               Catatan / Keterangan:
             </td>
-            <td colspan="2" style="text-align: center; vertical-align: top; padding: 10px 6px;">
-              ${escapeHtml(approver1Pos)}<br><br><br><br>
+            <td colspan="2" style="text-align: center; vertical-align: top; padding: 4px;">
+              ${escapeHtml(approver1Pos)}
+              <div class="print-qr-box" style="margin: 1px auto; height: 38px; display: flex; align-items: center; justify-content: center;">
+                <img class="print-qr-img" src="/api/v1/verify/${code}/qr" alt="QR Verifikasi" style="width: 36px; height: 36px; display: block;">
+              </div>
               <u><strong>${escapeHtml(approver1Name)}</strong></u><br>
               NIP. ${escapeHtml(approver1Nip)}
             </td>
@@ -554,18 +667,21 @@ export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: stri
             <td style="width: 25%; text-align: center;">DITANGGUHKAN</td>
             <td style="width: 25%; text-align: center;">TIDAK DISETUJUI</td>
           </tr>
-          <tr style="height: 24px; text-align: center; font-weight: bold;">
+          <tr style="height: 18px; text-align: center; font-weight: bold;">
             <td>${data.approver_2_status === 'accepted' || data.admin_decision === 'accepted' ? '✓' : ''}</td>
             <td></td>
             <td></td>
             <td>${data.approver_2_status === 'rejected' ? '✓' : ''}</td>
           </tr>
           <tr>
-            <td colspan="2" style="vertical-align: top; padding: 8px 10px; font-size: 9pt; color: #555;">
+            <td colspan="2" style="vertical-align: top; padding: 4px 6px; font-size: 8pt; color: #555;">
               Catatan / Keterangan:
             </td>
-            <td colspan="2" style="text-align: center; vertical-align: top; padding: 10px 6px;">
-              ${escapeHtml(approver2Pos)}<br><br><br><br>
+            <td colspan="2" style="text-align: center; vertical-align: top; padding: 4px;">
+              ${escapeHtml(approver2Pos)}
+              <div class="print-qr-box" style="margin: 1px auto; height: 38px; display: flex; align-items: center; justify-content: center;">
+                <img class="print-qr-img" src="/api/v1/verify/${code}/qr" alt="QR Verifikasi" style="width: 36px; height: 36px; display: block;">
+              </div>
               <u><strong>${escapeHtml(approver2Name)}</strong></u><br>
               NIP. ${escapeHtml(approver2Nip)}
             </td>
@@ -573,7 +689,7 @@ export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: stri
         </tbody>
       </table>
 
-      <div style="font-size: 8pt; color: #555; margin-top: 6px; line-height: 1.3;">
+      <div style="font-size: 6.5pt; color: #555; margin-top: 2px; line-height: 1.15;">
         <em>
           Catatan:<br>
           * Coret yang tidak perlu | ** Pilih salah satu dengan memberi tanda centang (✓)<br>
@@ -582,13 +698,8 @@ export const renderVerifiedLeaveFormHtml = (data: any, instance: any, code: stri
         </em>
       </div>
 
-      <div style="margin-top: 16px; display: flex; align-items: center; gap: 12px; border-top: 1px dashed #cbd5e1; padding-top: 12px;">
-        <img src="/api/v1/verify/${code}/qr" alt="QR Verifikasi" style="width: 64px; height: 64px; border: 1px solid #e2e8f0; border-radius: 4px;">
-        <div style="font-size: 8pt; color: #475569;">
-          <strong>Tanda Tangan Elektronik & Verifikasi Keaslian</strong><br>
-          Dokumen ini dinyatakan sah dan terdaftar resmi pada Sistem Informasi Kepegawaian SEDAKEP.<br>
-          Kode Verifikasi: <code style="font-size: 8pt; background: #f1f5f9; padding: 1px 4px;">${code}</code>
-        </div>
+      <div style="margin-top: 2px; color: #334155; font-style: italic; border-top: 0.5px dashed #cbd5e1; padding-top: 2px; font-size: 6.5pt;">
+        Permohonan ini sudah dilakukan dan diverifikasi melalui aplikasi SEDAKEP oleh Kantor Kementerian Agama Kab. Sleman.
       </div>
 
     </div>

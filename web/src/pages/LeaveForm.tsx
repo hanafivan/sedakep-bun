@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Page, QuotaCard } from '../components/Layout';
 import * as api from '../api';
+import { ApproverFieldGroup } from '../components/ApproverFieldGroup';
 
 /** Form permohonan cuti dengan simulasi kuota dari API (bukan hitungan klien). */
 
@@ -255,67 +256,39 @@ export function LeaveForm() {
             onChange={(event) => set('phone', event.target.value)}
           />
 
-          <fieldset className="form-fieldset">
-            <legend className="form-legend">Atasan Langsung (Pertimbangan Cuti)</legend>
-            <div className="grid2">
-              <div>
-                <label htmlFor="approver_1_name">Nama Atasan 1</label>
-                <input
-                  id="approver_1_name"
-                  placeholder="Nama lengkap & gelar"
-                  value={form.approver_1_name}
-                  onChange={(event) => set('approver_1_name', event.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="approver_1_nip">NIP Atasan 1</label>
-                <input
-                  id="approver_1_nip"
-                  placeholder="18 digit NIP"
-                  value={form.approver_1_nip}
-                  onChange={(event) => set('approver_1_nip', event.target.value)}
-                />
-              </div>
-            </div>
-            <label htmlFor="approver_1_position">Jabatan Atasan 1</label>
-            <input
-              id="approver_1_position"
-              placeholder="Contoh: Kasubbag Tata Usaha"
-              value={form.approver_1_position}
-              onChange={(event) => set('approver_1_position', event.target.value)}
-            />
-          </fieldset>
+          <ApproverFieldGroup
+            title="Atasan Langsung (Pertimbangan Cuti)"
+            nameLabel="Nama Atasan 1"
+            nipLabel="NIP Atasan 1"
+            positionLabel="Jabatan Atasan 1"
+            nameId="approver_1_name"
+            nipId="approver_1_nip"
+            positionId="approver_1_position"
+            nameValue={form.approver_1_name}
+            nipValue={form.approver_1_nip}
+            positionValue={form.approver_1_position}
+            onNameChange={(val) => set('approver_1_name', val)}
+            onNipChange={(val) => set('approver_1_nip', val)}
+            onPositionChange={(val) => set('approver_1_position', val)}
+            defaultPositionSuggestion="Kasubbag Tata Usaha"
+          />
 
-          <fieldset className="form-fieldset">
-            <legend className="form-legend">Pejabat yang Berwenang Memberikan Cuti</legend>
-            <div className="grid2">
-              <div>
-                <label htmlFor="approver_2_name">Nama Pejabat (Atasan 2)</label>
-                <input
-                  id="approver_2_name"
-                  placeholder="Nama lengkap & gelar"
-                  value={form.approver_2_name}
-                  onChange={(event) => set('approver_2_name', event.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="approver_2_nip">NIP Pejabat</label>
-                <input
-                  id="approver_2_nip"
-                  placeholder="18 digit NIP"
-                  value={form.approver_2_nip}
-                  onChange={(event) => set('approver_2_nip', event.target.value)}
-                />
-              </div>
-            </div>
-            <label htmlFor="approver_2_position">Jabatan Pejabat</label>
-            <input
-              id="approver_2_position"
-              placeholder="Contoh: Kepala Kantor Kementerian Agama Kab. Sleman"
-              value={form.approver_2_position}
-              onChange={(event) => set('approver_2_position', event.target.value)}
-            />
-          </fieldset>
+          <ApproverFieldGroup
+            title="Pejabat yang Berwenang Memberikan Cuti"
+            nameLabel="Nama Pejabat (Atasan 2)"
+            nipLabel="NIP Pejabat"
+            positionLabel="Jabatan Pejabat"
+            nameId="approver_2_name"
+            nipId="approver_2_nip"
+            positionId="approver_2_position"
+            nameValue={form.approver_2_name}
+            nipValue={form.approver_2_nip}
+            positionValue={form.approver_2_position}
+            onNameChange={(val) => set('approver_2_name', val)}
+            onNipChange={(val) => set('approver_2_nip', val)}
+            onPositionChange={(val) => set('approver_2_position', val)}
+            defaultPositionSuggestion="Kepala Kantor Kementerian Agama Kab. Sleman"
+          />
 
 
           <label htmlFor="file">

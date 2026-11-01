@@ -6,11 +6,14 @@ import {
   durationUnitLabel,
   formatBytes,
   formatDate,
+  formatMasaKerja,
   leaveStatusLabel,
   leaveStatusTone,
 } from '../format';
 import { useAuth } from '../auth';
 import * as api from '../api';
+import { LeaveFormModal } from '../components/LeaveFormModal';
+import { LeaveSkModal } from '../components/LeaveSkModal';
 
 /** Detail permohonan: identitas, timeline approval, lampiran, dan surat keterangan. */
 
@@ -34,6 +37,8 @@ export function LeaveDetail() {
   const [pendingLetterId, setPendingLetterId] = useState<number | null>(null);
 
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [skModalOpen, setSkModalOpen] = useState(false);
   const [applicantQuota, setApplicantQuota] = useState<api.Quota | null>(null);
   const [quotaN, setQuotaN] = useState<number | ''>('');
   const [quotaN1, setQuotaN1] = useState<number | ''>('');
@@ -191,9 +196,13 @@ export function LeaveDetail() {
             Edit
           </Link>
         ) : null}
-        <Link className="button secondary small" to={`/leave/${requestId}/print-form`}>
-          Cetak Form BKN (HTML)
-        </Link>
+        <button
+          type="button"
+          className="button secondary small"
+          onClick={() => setFormModalOpen(true)}
+        >
+          Cetak Form BKN
+        </button>
         <button
           className="button secondary small"
           type="button"
@@ -214,9 +223,13 @@ export function LeaveDetail() {
           Form BKN (PDF)
         </button>
         {letters.length > 0 ? (
-          <Link className="button secondary small" to={`/leave/${requestId}/print`}>
-            Cetak SK (HTML)
-          </Link>
+          <button
+            type="button"
+            className="button secondary small"
+            onClick={() => setSkModalOpen(true)}
+          >
+            Cetak SK
+          </button>
         ) : null}
         {letters.length > 0 ? (
           <button
@@ -414,7 +427,7 @@ export function LeaveDetail() {
                   />
                 </div>
                 <div style={{ fontSize: '12.5px', color: '#475569', background: '#f8fafc', padding: '8px 12px', borderRadius: '6px' }}>
-                  Total Kuota Tersedia: <strong>{applicantQuota.available.total} hari</strong> · Status: <span className={applicantQuota.eligibility.eligible ? 'badge ok' : 'badge warn'}>{applicantQuota.eligibility.eligible ? 'Eligible' : 'Belum Eligible'}</span> ({applicantQuota.eligibility.months_worked} bln kerja)
+                  Total Kuota Tersedia: <strong>{applicantQuota.available.total} hari</strong> · Status: <span className={applicantQuota.eligibility.eligible ? 'badge ok' : 'badge warn'}>{applicantQuota.eligibility.eligible ? 'Eligible' : 'Belum Eligible'}</span> ({formatMasaKerja(applicantQuota.eligibility.months_worked)} masa kerja)
                 </div>
               </div>
             ) : null}
@@ -617,6 +630,18 @@ export function LeaveDetail() {
           </div>
         </div>
       ) : null}
+
+      <LeaveFormModal
+        requestId={requestId}
+        isOpen={formModalOpen}
+        onClose={() => setFormModalOpen(false)}
+      />
+
+      <LeaveSkModal
+        requestId={requestId}
+        isOpen={skModalOpen}
+        onClose={() => setSkModalOpen(false)}
+      />
     </Page>
   );
 }

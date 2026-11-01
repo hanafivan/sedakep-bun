@@ -282,7 +282,7 @@ export function Dashboard() {
         </h2>
         <div className="quick-actions-grid">
           {/* Ajukan Cuti (Primer Hijau) */}
-          <Link className="action-card primary" to="/leave/new">
+          <Link className="action-card primary" to="/leave?action=new">
             <div className="action-card-icon-box" aria-hidden="true">
               <IconCalendarPlus size={22} />
             </div>
@@ -358,7 +358,7 @@ export function Dashboard() {
                   : 'Belum ada riwayat permohonan cuti yang diajukan.'}
               </p>
               {!isAdmin ? (
-                <Link className="btn-primary-action" to="/leave/new">
+                <Link className="btn-primary-action" to="/leave?action=new">
                   Ajukan Cuti Sekarang
                 </Link>
               ) : null}

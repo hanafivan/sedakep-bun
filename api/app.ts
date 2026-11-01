@@ -1,4 +1,5 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
+import type { Context } from 'hono';
 import { swaggerUI } from '@hono/swagger-ui';
 import { ZodError } from 'zod';
 import { adminRoutes } from './modules/admin/admin.routes';
@@ -11,14 +12,17 @@ import { backupRoutes } from './modules/backup/backup.routes';
 import { dispositionRoutes } from './modules/dispositions/dispositions.routes';
 import { navigationRoutes } from './modules/navigation/navigation.routes';
 import { documentRoutes } from './modules/documents/documents.routes';
-import { leaveRoutes } from './modules/leave/leave.routes';
+import { leaveRequestsRoutes } from './modules/leave-requests/leave-requests.index';
+import { leaveQuotaRoutes } from './modules/leave-quota/leave-quota.index';
+import { leaveLettersRoutes } from './modules/leave-letters/leave-letters.index';
+import { leaveAdminRoutes } from './modules/leave-admin/leave-admin.index';
 import { masterRoutes } from './modules/master/master.routes';
 import { serviceRequestRoutes } from './modules/service-requests/service-requests.routes';
 import { settingsRoutes } from './modules/settings/settings.routes';
 import { verifyRoutes } from './modules/verify/verify.routes';
 import { bearerAuth } from './middleware/bearerAuth';
-import { UserService } from './modules/user/service';
-import { getNavigationBadges } from './modules/navigation/service';
+import { UserService } from './modules/user/domain';
+import { getNavigationBadges } from './modules/navigation/domain';
 import { config } from './config';
 import { AppError } from './shared/errors';
 import { logger } from './shared/logger';
@@ -51,7 +55,10 @@ app.get('/health', (c) => successResponse(c, { status: 'ok' }));
 // API
 app.route('/api/v1/users', userRoutes);
 app.route('/api/v1/admin', adminRoutes);
-app.route('/api/v1', leaveRoutes);
+app.route('/api/v1', leaveRequestsRoutes);
+app.route('/api/v1', leaveQuotaRoutes);
+app.route('/api/v1', leaveLettersRoutes);
+app.route('/api/v1', leaveAdminRoutes);
 app.route('/api/v1', assignmentRoutes);
 app.route('/api/v1', alibiRoutes);
 app.route('/api/v1', agendaRoutes);
@@ -59,7 +66,7 @@ app.route('/api/v1', dispositionRoutes);
 app.route('/api/v1', serviceRequestRoutes);
 app.route('/api/v1', masterRoutes);
 app.route('/api/v1', settingsRoutes);
-app.route('/api/v1', documentRoutes);
+app.route('/api/v1/documents', documentRoutes);
 app.route('/api/v1', navigationRoutes);
 app.route('/api/v1', backupRoutes);
 
@@ -68,11 +75,14 @@ app.route('/api/v1', backupRoutes);
 app.route('/', verifyRoutes);
 app.route('/api/v1', verifyRoutes);
 
+// Singleton service pengguna untuk handler alias
+const userService = new UserService(config.jwt.secret, config.jwt.expiresInSeconds);
+
 // Endpoint alias /me dan /badges (mendukung baik rute root maupun /api/v1)
-const handleMe = async (c: any) => {
+const handleMe = async (c: Context) => {
   const userPayload = c.get('user');
   try {
-    const user = await new UserService(config.jwt.secret, config.jwt.expiresInSeconds).getById(Number(userPayload.id));
+    const user = await userService.getById(Number(userPayload.id));
     return c.json(successBody(user, 'Data user berhasil diambil', 200), 200);
   } catch {
     return c.json(
@@ -90,7 +100,7 @@ const handleMe = async (c: any) => {
   }
 };
 
-const handleBadges = async (c: any) => {
+const handleBadges = async (c: Context) => {
   const userPayload = c.get('user');
   const badges = await getNavigationBadges(userPayload);
   return c.json(successBody(badges, 'Angka badge navigasi'), 200);
