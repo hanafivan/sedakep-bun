@@ -19,7 +19,6 @@ import {
   QuotaAdjustmentListResponseSchema,
   QuotaAdjustmentResponseSchema,
   QuotaAdjustmentSchema,
-  QuotaBookPrintResponseSchema,
   QuotaHistoryResponseSchema,
   QuotaQuerySchema,
   QuotaRebuildResponseSchema,
@@ -92,18 +91,6 @@ export const quotaHistory = createRoute({
   },
 });
 export type QuotaHistoryRoute = typeof quotaHistory;
-
-export const quotaBookPrint = createRoute({
-  ...GET_LEAVE_QUOTA_METHOD,
-  path: '/leave/quota/book/{user_id}',
-  summary: 'Data cetak buku cuti satu pegawai (projection + identitas + kop)',
-  request: { params: MeOrIdParamSchema },
-  responses: {
-    ...okResponse(QuotaBookPrintResponseSchema, 'Data buku cuti', 'QuotaBookPrintResponse'),
-    ...errors([401, 404], { 403: 'Bukan pemilik' }),
-  },
-});
-export type QuotaBookPrintRoute = typeof quotaBookPrint;
 
 export const quotaStored = createRoute({
   ...GET_LEAVE_QUOTA_METHOD,

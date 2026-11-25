@@ -1,12 +1,13 @@
-import type { Pool, PoolConnection } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import { pickUpdateColumns, type Executor } from '../../../shared/db';
 
 /**
  * COMMAND = operasi tulis modul layanan kepegawaian. Tidak ada logika bisnis
  * di file ini.
  */
 
-export type Executor = Pool | PoolConnection;
+export type { Executor };
+export { insertAuditLog } from '../../../shared/db';
 
 export type NewServiceRequest = {
   legacy_table: string;
@@ -72,18 +73,11 @@ export const updateServiceRequest = async (
   data: Record<string, unknown>,
   executor: Executor = getMySql(),
 ): Promise<void> => {
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  for (const key of REQUEST_COLUMNS) {
-    if (data[key] !== undefined) {
-      columns.push(`${key} = ?`);
-      values.push(data[key]);
-    }
-  }
-  if (columns.length === 0) return;
+  const patch = pickUpdateColumns(data, REQUEST_COLUMNS);
+  if (!patch) return;
   await executor.query(
-    `UPDATE service_requests SET ${columns.join(', ')} WHERE id = ?`,
-    [...values, id],
+    `UPDATE service_requests SET ${patch.setClause} WHERE id = ?`,
+    [...patch.values, id],
   );
 };
 
@@ -197,29 +191,4 @@ export const insertGeneratedLetter = async (
     ],
   );
   return result.insertId;
-};
-
-export const insertAuditLog = async (
-  data: {
-    actor_id?: number | null;
-    action: string;
-    entity_table: string;
-    entity_id?: number | null;
-    before_data?: unknown;
-    after_data?: unknown;
-  },
-  executor: Executor = getMySql(),
-): Promise<void> => {
-  await executor.execute(
-    `INSERT INTO audit_logs (actor_id, action, entity_table, entity_id, before_data, after_data)
-     VALUES (?,?,?,?,?,?)`,
-    [
-      data.actor_id ?? null,
-      data.action,
-      data.entity_table,
-      data.entity_id ?? null,
-      data.before_data === undefined ? null : JSON.stringify(data.before_data),
-      data.after_data === undefined ? null : JSON.stringify(data.after_data),
-    ],
-  );
 };

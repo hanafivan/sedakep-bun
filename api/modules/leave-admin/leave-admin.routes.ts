@@ -16,6 +16,8 @@ import {
   InstanceProfileResponseSchema,
   InstanceProfileWriteResponseSchema,
   InstanceProfileWriteSchema,
+  LeaveCrosstabMatrixResponseSchema,
+  LeaveCrosstabQuerySchema,
   LeaveExportWithFormatQuerySchema,
   LeaveUserDirectoryQuerySchema,
   LeaveUserDirectoryResponseSchema,
@@ -25,8 +27,6 @@ import {
   PppkTmtWriteSchema,
   QuotaAuditTrailQuerySchema,
   QuotaAuditTrailResponseSchema,
-  QuotaBookQuerySchema,
-  QuotaBookResponseSchema,
   YearQuerySchema,
 } from './schema';
 
@@ -101,18 +101,6 @@ export const deleteClosurePeriod = createRoute({
 });
 export type DeleteClosurePeriodRoute = typeof deleteClosurePeriod;
 
-export const quotaBook = createRoute({
-  ...GET_LEAVE_ADMIN_METHOD,
-  path: '/leave/admin/quota-book',
-  summary: 'Buku cuti seluruh pegawai (proyeksi + akumulasi pemakaian)',
-  request: { query: QuotaBookQuerySchema },
-  responses: {
-    ...okResponse(QuotaBookResponseSchema, 'Buku cuti pegawai', 'QuotaBookResponse'),
-    ...errors([401, 403]),
-  },
-});
-export type QuotaBookRoute = typeof quotaBook;
-
 export const userDirectory = createRoute({
   ...GET_LEAVE_ADMIN_METHOD,
   path: '/leave/admin/users',
@@ -171,6 +159,20 @@ export const leaveYearlySummary = createRoute({
   },
 });
 export type LeaveYearlySummaryRoute = typeof leaveYearlySummary;
+
+export const leaveCrosstab = createRoute({
+  ...GET_LEAVE_ADMIN_METHOD,
+  path: '/leave/admin/crosstab',
+  summary: 'Matriks rekap cuti tahunan per pegawai (legacy admin.php:270-390)',
+  request: {
+    query: LeaveCrosstabQuerySchema,
+  },
+  responses: {
+    ...okResponse(LeaveCrosstabMatrixResponseSchema, 'Matriks rekap cuti', 'LeaveCrosstabMatrixResponse'),
+    ...errors([401, 403]),
+  },
+});
+export type LeaveCrosstabRoute = typeof leaveCrosstab;
 
 /**
  * Ekspor CSV. Legacy membatasinya ke super admin (`admin.php?page=tsm` menolak

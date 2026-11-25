@@ -1,5 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
+import { serveStatic } from 'hono/bun';
 import { swaggerUI } from '@hono/swagger-ui';
 import { ZodError } from 'zod';
 import { adminRoutes } from './modules/admin/admin.routes';
@@ -8,7 +9,6 @@ import { mountOpenApi } from './docs/openapi';
 import { assignmentRoutes } from './modules/assignments/assignments.routes';
 import { alibiRoutes } from './modules/alibi/alibi.routes';
 import { agendaRoutes } from './modules/agendas/agendas.routes';
-import { backupRoutes } from './modules/backup/backup.routes';
 import { dispositionRoutes } from './modules/dispositions/dispositions.routes';
 import { navigationRoutes } from './modules/navigation/navigation.routes';
 import { documentRoutes } from './modules/documents/documents.routes';
@@ -68,7 +68,6 @@ app.route('/api/v1', masterRoutes);
 app.route('/api/v1', settingsRoutes);
 app.route('/api/v1/documents', documentRoutes);
 app.route('/api/v1', navigationRoutes);
-app.route('/api/v1', backupRoutes);
 
 // Verifikasi publik dokumen cetak (dipindai dari QR) — di luar /api/v1,
 // sekaligus di bawah /api/v1 agar SPA dapat memanggilnya lewat proxy.
@@ -114,6 +113,17 @@ app.get('/api/v1/badges', bearerAuth, handleBadges);
 // OpenAPI + Swagger UI
 mountOpenApi(app);
 app.get('/docs', swaggerUI({ url: '/openapi.json' }));
+
+// Sajikan static assets frontend (web/dist) jika ada
+app.use('/*', serveStatic({ root: './web/dist' }));
+
+// SPA fallback: jika request browser (Accept: text/html) dan bukan rute /api/, sajikan index.html
+app.get('*', async (c, next) => {
+  if (c.req.header('accept')?.includes('text/html') && !c.req.path.startsWith('/api/')) {
+    return serveStatic({ path: './web/dist/index.html' })(c, next);
+  }
+  return next();
+});
 
 app.notFound((c) => {
   if (c.req.path.startsWith('/api/')) {

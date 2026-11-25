@@ -1,7 +1,8 @@
 import { getMySql } from '../../../db/mysql';
-import type { Pool, PoolConnection } from 'mysql2/promise';
+import type { Executor } from '../../../shared/db';
 
-export type Executor = Pool | PoolConnection;
+export type { Executor };
+export { insertAuditLog } from '../../../shared/db';
 
 export const upsertLeaveLetter = async (
   data: {
@@ -60,28 +61,4 @@ export const nextLeaveLetterNumber = async (
     [letterType, year],
   );
   return Number(result.insertId ?? 1);
-};
-
-export const insertAuditLog = async (
-  data: {
-    actor_id?: number | null;
-    action: string;
-    entity_table: string;
-    entity_id?: number | null;
-    before_data?: unknown;
-    after_data?: unknown;
-    ip_address?: string | null;
-  },
-  executor: Executor = getMySql(),
-): Promise<void> => {
-  await executor.execute(
-    `INSERT INTO audit_logs (actor_id, action, entity_table, entity_id, before_data, after_data, ip_address)
-     VALUES (?,?,?,?,?,?,?)`,
-    [
-      data.actor_id ?? null, data.action, data.entity_table, data.entity_id ?? null,
-      data.before_data === undefined ? null : JSON.stringify(data.before_data),
-      data.after_data === undefined ? null : JSON.stringify(data.after_data),
-      data.ip_address ?? null,
-    ],
-  );
 };

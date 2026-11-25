@@ -1,5 +1,11 @@
 import { withLockedTransaction, withMysqlTransaction } from '../../../db/mysql';
 import { badRequest, notFound } from '../../../shared/errors';
+import {
+  canViewByOwnerOrStaff,
+  normalizePagination,
+  paginatedResult,
+  yearOf,
+} from '../../../shared/helpers';
 import { makeVerifyCode } from '../../../shared/verify';
 import {
   getLeaveTypeRule,
@@ -36,6 +42,7 @@ import {
   findUserNipById,
   findUserProfileById,
   countLeaveRequestsByYear,
+  findLeaveCrosstabMatrixByYear,
   queryApproverSuggestions,
 } from '../query';
 import { checkAvailability, getQuota, rebuildQuota, toDateOnly } from './quota.domain';
@@ -63,8 +70,6 @@ export type CreateLeaveInput = {
   /** Berkas lampiran opsional (dipakai endpoint multipart). */
   attachment?: { buffer: Buffer; filename: string; mimeType?: string | null };
 };
-
-const yearOf = (value: string | Date): number => Number(String(value).slice(0, 4));
 
 /**
  * Periode tutup cuti tahunan dibaca dari tabel, bukan hard-code.
@@ -108,19 +113,12 @@ export const listLeaveRequests = async (filter: {
   page?: number;
   perPage?: number;
 }) => {
-  const perPage = Math.min(Math.max(filter.perPage ?? 25, 1), 200);
-  const page = Math.max(filter.page ?? 1, 1);
+  const { page, perPage, offset } = normalizePagination(filter);
   const [items, total] = await Promise.all([
-    findLeaveRequests({ ...filter, limit: perPage, offset: (page - 1) * perPage }),
+    findLeaveRequests({ ...filter, limit: perPage, offset }),
     countLeaveRequests(filter),
   ]);
-  return {
-    items,
-    total,
-    page,
-    per_page: perPage,
-    total_pages: Math.ceil(total / perPage),
-  };
+  return paginatedResult(items, total, page, perPage);
 };
 
 /** Rekap antrean persetujuan berjenjang (Semua Menunggu, Atasan 1, Atasan 2, Admin, Cuti Jadi). */
@@ -151,6 +149,11 @@ export const getLeaveYearlySummary = async () => {
   }));
 };
 
+/** Matriks crosstab rekap cuti per pegawai — legacy `admin.php:270-390`. */
+export const getLeaveCrosstabMatrix = async (year: number) => {
+  return findLeaveCrosstabMatrixByYear(year);
+};
+
 /** Riwayat cuti pra-2020 hasil migrasi; dibatasi ke pemiliknya untuk pegawai. */
 export const getLeaveLegacyHistory = async (filter: {
   userId?: number;
@@ -179,17 +182,6 @@ export const getLeaveRequestDetail = async (id: number) => {
     instance,
     verify_code: makeVerifyCode('leave_requests', id),
   };
-};
-
-/** Data cetak buku cuti satu pegawai (projection + identitas + kop instansi). */
-export const getQuotaBookPrint = async (userId: number) => {
-  const [user, stored, instance] = await Promise.all([
-    findUserProfileById(userId),
-    findStoredQuotasByUser(userId),
-    findInstanceProfile(),
-  ]);
-  if (!user) throw notFound('Pegawai tidak ditemukan');
-  return { user, stored, instance };
 };
 
 // ---------------------------------------------------------------------------
@@ -466,11 +458,7 @@ export const getActorNip = async (userId: number): Promise<string | null> =>
 export const canViewRequest = (
   actor: { id: number | string; role: string },
   request: { user_id: number },
-): boolean =>
-  actor.role === 'admin' ||
-  actor.role === 'verifikator' ||
-  actor.role === 'atasan' ||
-  Number(actor.id) === Number(request.user_id);
+): boolean => canViewByOwnerOrStaff(actor as any, request.user_id);
 
 export const canEditRequest = canViewRequest;
 

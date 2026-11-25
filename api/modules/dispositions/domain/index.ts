@@ -1,5 +1,6 @@
 import type { AuthUser } from '../../../middleware/bearerAuth';
 import { badRequest, notFound } from '../../../shared/errors';
+import { normalizePagination, nowStamp, paginatedResult } from '../../../shared/helpers';
 import { makeVerifyCode } from '../../../shared/verify';
 import {
   deleteClassification,
@@ -94,19 +95,12 @@ export const listIncomingLetters = async (filter: {
   page?: number;
   perPage?: number;
 }) => {
-  const perPage = Math.min(Math.max(filter.perPage ?? 25, 1), 200);
-  const page = Math.max(filter.page ?? 1, 1);
+  const { page, perPage, offset } = normalizePagination(filter);
   const [items, total] = await Promise.all([
-    findIncomingLetters({ ...filter, limit: perPage, offset: (page - 1) * perPage }),
+    findIncomingLetters({ ...filter, limit: perPage, offset }),
     countIncomingLetters(filter),
   ]);
-  return {
-    items: items.map(toPublic),
-    total,
-    page,
-    per_page: perPage,
-    total_pages: Math.ceil(total / perPage),
-  };
+  return paginatedResult(items.map(toPublic), total, page, perPage);
 };
 
 export const getIncomingLetterDetail = async (id: number) => {
@@ -258,7 +252,7 @@ export const updateDispositionById = async (
   }
   const data = { ...input } as Record<string, unknown>;
   if (typeof data.status === 'string') {
-    data.decided_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    data.decided_at = nowStamp();
   }
   await updateDisposition(dispositionId, data);
   return { id: dispositionId };
@@ -385,3 +379,58 @@ export const removeClassification = async (id: number, actor: AuthUser) => {
     entity_id: id,
   });
 };
+
+export const generateDispositionPdf = async (id: number, actor: AuthUser) => {
+  const detail = await getIncomingLetterDetail(id);
+  const { buildDispositionSheetPdf } = await import('../../../shared/pdf');
+  const { verifyUrl } = await import('../../../shared/verify');
+  const link = verifyUrl('incoming_letters', id);
+
+  const pdf = await buildDispositionSheetPdf({
+    id: detail.id,
+    letter_number: detail.letter_number,
+    agenda_number: detail.agenda_number,
+    letter_date: detail.letter_date,
+    ticket_number: detail.ticket_number,
+    received_date: detail.received_date,
+    classification_code: detail.classification_code,
+    origin: detail.origin,
+    content: detail.content,
+    reviewer_checked: true,
+    dispositions: detail.dispositions.map((d) => ({
+      target_name: d.target_name,
+      instruction: d.instruction,
+      notes: d.notes,
+    })),
+    finals: detail.finals.map((f) => ({
+      name: f.name,
+      instruction: f.instruction,
+    })),
+    officer_name: actor.username || 'Petugas PTSP',
+    instance_address: detail.instance?.address,
+    verify_url: link,
+  });
+
+  const { uploadDocument, getDownloadUrl } = await import('../../documents/domain');
+  const uploaded = await uploadDocument({
+    buffer: Buffer.from(pdf),
+    filename: `lembar-disposisi-${(detail.letter_number || String(id)).replace(/\//g, '_')}.pdf`,
+    mimeType: 'application/pdf',
+    entityTable: 'incoming_letters',
+    entityId: id,
+    field: 'pdf',
+    label: 'PDF lembar disposisi',
+    actorId: Number(actor.id),
+  });
+
+  const download = await getDownloadUrl(uploaded.id);
+  await insertAuditLog({
+    actor_id: Number(actor.id),
+    action: 'disposition_pdf_generate',
+    entity_table: 'incoming_letters',
+    entity_id: id,
+    after_data: { document_id: uploaded.id },
+  });
+  return { document_id: uploaded.id, url: download.url, verify_url: link };
+};
+

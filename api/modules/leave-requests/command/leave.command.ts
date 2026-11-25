@@ -1,5 +1,5 @@
-import type { Pool, PoolConnection } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import type { Executor } from '../../../shared/db';
 import type { LeaveRequestRow } from '../schema/types';
 
 /**
@@ -11,7 +11,8 @@ import type { LeaveRequestRow } from '../schema/types';
  * ikut ter-commit/rollback bersama yang lain.
  */
 
-export type Executor = Pool | PoolConnection;
+export type { Executor };
+export { insertAuditLog } from '../../../shared/db';
 
 export type NewLeaveRequest = {
   user_id: number;
@@ -392,30 +393,6 @@ export const upsertSetting = async (
 
 export const deleteSetting = async (key: string, executor: Executor = getMySql()): Promise<void> => {
   await executor.execute('DELETE FROM settings WHERE `key` = ?', [key]);
-};
-
-export const insertAuditLog = async (
-  data: {
-    actor_id?: number | null;
-    action: string;
-    entity_table: string;
-    entity_id?: number | null;
-    before_data?: unknown;
-    after_data?: unknown;
-    ip_address?: string | null;
-  },
-  executor: Executor = getMySql(),
-): Promise<void> => {
-  await executor.execute(
-    `INSERT INTO audit_logs (actor_id, action, entity_table, entity_id, before_data, after_data, ip_address)
-     VALUES (?,?,?,?,?,?,?)`,
-    [
-      data.actor_id ?? null, data.action, data.entity_table, data.entity_id ?? null,
-      data.before_data === undefined ? null : JSON.stringify(data.before_data),
-      data.after_data === undefined ? null : JSON.stringify(data.after_data),
-      data.ip_address ?? null,
-    ],
-  );
 };
 
 // ---------------------------------------------------------------------------

@@ -1,15 +1,8 @@
-import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import { rows, type Executor } from '../../../shared/db';
 import type { OrganizationRow, PositionRow } from '../schema/types';
 
 /** QUERY = operasi baca master data. Tanpa logika bisnis. */
-
-type Executor = Pool | PoolConnection;
-
-const rows = async <T>(executor: Executor, sql: string, params: unknown[] = []): Promise<T[]> => {
-  const [result] = await executor.query<RowDataPacket[]>(sql, params);
-  return result as unknown as T[];
-};
 
 export const findOrganizations = async (
   filter: { search?: string; activeOnly?: boolean } = {},

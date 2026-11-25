@@ -22,12 +22,17 @@ import { closeLegacyMySql } from '../api/db/legacy-mysql';
 import { ensureDatabase, runMigrations } from '../api/db/migrate';
 import {
   leaveMigrationSummary,
+  migrateAgendas,
+  migrateAlibi,
+  migrateAssignments,
+  migrateDispositions,
   migrateLeaveClosurePeriods,
   migrateLeaveLegacyHistory,
   migrateLeaveLetters,
   migrateLeavePolicies,
   migrateLeaveRequests,
   migratePppkTmt,
+  migrateServiceRequests,
   migrateUsers,
 } from '../api/migrate';
 
@@ -207,6 +212,149 @@ const main = async (): Promise<void> => {
           written: counters.inserted,
           skipped: counters.skipped,
           failed: counters.unmatchedUser,
+        },
+        counters,
+      );
+    }
+  }
+
+  if (runAll || has('--assignments')) {
+    console.log('\n== surat tugas (hlm_surtug + peg, ket, tembus, acc) ==');
+    const runId = dryRun ? 0 : await startRun('assignment_letters');
+    const counters = await migrateAssignments({
+      dryRun,
+      onProgress: (done, total) => {
+        process.stdout.write(`\r  progres: ${done}/${total}`);
+      },
+    });
+    process.stdout.write('\r');
+    line('surat dibaca', counters.read);
+    line('surat ditulis', counters.inserted);
+    line('surat dilewati', counters.skipped);
+    line('user tanpa mapping', counters.unmappedUser);
+    line('anggota ditulis', counters.members);
+    line('keterangan ditulis', counters.notes);
+    line('tembusan ditulis', counters.copies);
+    if (!dryRun) {
+      await finishRun(
+        runId,
+        {
+          read: counters.read,
+          written: counters.inserted,
+          skipped: counters.skipped,
+          failed: counters.unmappedUser,
+        },
+        counters,
+      );
+    }
+  }
+
+  if (runAll || has('--alibi')) {
+    console.log('\n== alibi kehadiran (hlm_alibi + hlm_alibi_acc) ==');
+    const runId = dryRun ? 0 : await startRun('alibi_requests');
+    const counters = await migrateAlibi({
+      dryRun,
+      onProgress: (done, total) => {
+        process.stdout.write(`\r  progres: ${done}/${total}`);
+      },
+    });
+    process.stdout.write('\r');
+    line('dibaca', counters.read);
+    line('ditulis', counters.inserted);
+    line('dilewati', counters.skipped);
+    line('user tanpa mapping', counters.unmappedUser);
+    if (!dryRun) {
+      await finishRun(
+        runId,
+        {
+          read: counters.read,
+          written: counters.inserted,
+          skipped: counters.skipped,
+          failed: counters.unmappedUser,
+        },
+        counters,
+      );
+    }
+  }
+
+  if (runAll || has('--agendas')) {
+    console.log('\n== agenda pimpinan (hlm_agenda) ==');
+    const runId = dryRun ? 0 : await startRun('agendas');
+    const counters = await migrateAgendas({
+      dryRun,
+      onProgress: (done, total) => {
+        process.stdout.write(`\r  progres: ${done}/${total}`);
+      },
+    });
+    process.stdout.write('\r');
+    line('dibaca', counters.read);
+    line('ditulis', counters.inserted);
+    line('dilewati', counters.skipped);
+    if (!dryRun) {
+      await finishRun(
+        runId,
+        {
+          read: counters.read,
+          written: counters.inserted,
+          skipped: counters.skipped,
+        },
+        counters,
+      );
+    }
+  }
+
+  if (runAll || has('--dispositions')) {
+    console.log('\n== surat masuk & e-disposisi (hlm_edispo + disposisi, final, klasifikasi) ==');
+    const runId = dryRun ? 0 : await startRun('dispositions');
+    const counters = await migrateDispositions({
+      dryRun,
+      onProgress: (done, total) => {
+        process.stdout.write(`\r  progres: ${done}/${total}`);
+      },
+    });
+    process.stdout.write('\r');
+    line('klasifikasi ditulis', counters.classifications);
+    line('surat dibaca', counters.lettersRead);
+    line('surat ditulis', counters.lettersInserted);
+    line('surat dilewati', counters.lettersSkipped);
+    line('disposisi ditulis', counters.dispositionsInserted);
+    line('disposisi final ditulis', counters.finalsInserted);
+    if (!dryRun) {
+      await finishRun(
+        runId,
+        {
+          read: counters.lettersRead,
+          written: counters.lettersInserted,
+          skipped: counters.lettersSkipped,
+        },
+        counters,
+      );
+    }
+  }
+
+  if (runAll || has('--service-requests')) {
+    console.log('\n== layanan kepegawaian (12 modul: bpjs, gelar, ibel, karisu, karpeg, pangkat, pensiun, satlen, taspen, pmk, skmi/skpp, tb) ==');
+    const runId = dryRun ? 0 : await startRun('service_requests');
+    const counters = await migrateServiceRequests({
+      dryRun,
+      onProgress: (done, total, table) => {
+        process.stdout.write(`\r  [${table}] progres: ${done}/${total}`);
+      },
+    });
+    process.stdout.write('\r');
+    line('dibaca', counters.read);
+    line('ditulis', counters.inserted);
+    line('dilewati', counters.skipped);
+    line('user tanpa mapping', counters.unmappedUser);
+    line('per jenis', counters.byType);
+    if (!dryRun) {
+      await finishRun(
+        runId,
+        {
+          read: counters.read,
+          written: counters.inserted,
+          skipped: counters.skipped,
+          failed: counters.unmappedUser,
         },
         counters,
       );

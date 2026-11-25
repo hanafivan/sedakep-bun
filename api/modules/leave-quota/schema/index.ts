@@ -122,13 +122,6 @@ export const QuotaHistoryResponseSchema = z.array(
   }).passthrough()
 ).openapi('QuotaHistoryResponse');
 
-export const QuotaBookPrintResponseSchema = z.object({
-  user: z.record(z.string(), z.unknown()).optional(),
-  instance: z.record(z.string(), z.unknown()).optional(),
-  years: z.array(z.record(z.string(), z.unknown())).optional(),
-  current: z.record(z.string(), z.unknown()).optional(),
-}).passthrough().openapi('QuotaBookPrintResponse');
-
 export const StoredQuotaResponseSchema = z.array(StoredQuotaSchema).openapi('StoredQuotaResponse');
 
 export const QuotaRebuildResponseSchema = z.object({

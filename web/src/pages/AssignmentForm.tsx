@@ -82,6 +82,31 @@ export function AssignmentForm() {
     };
   }, [id]);
 
+  const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  const getDayName = (dateStr: string) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return isNaN(d.getTime()) ? '' : DAYS[d.getDay()] ?? '';
+  };
+
+  const handleStartDateChange = (val: string) => {
+    setForm((prev) => ({
+      ...prev,
+      start_date: val,
+      day_start: prev.day_start || getDayName(val),
+      end_date: prev.end_date || val,
+      day_end: prev.day_end || getDayName(val),
+    }));
+  };
+
+  const handleEndDateChange = (val: string) => {
+    setForm((prev) => ({
+      ...prev,
+      end_date: val,
+      day_end: prev.day_end || getDayName(val),
+    }));
+  };
+
   const set = (key: keyof FormState, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const submit = async () => {
@@ -130,7 +155,7 @@ export function AssignmentForm() {
               <input
                 type="date"
                 value={form.start_date}
-                onChange={(event) => set('start_date', event.target.value)}
+                onChange={(event) => handleStartDateChange(event.target.value)}
               />
             </div>
             <div>
@@ -138,7 +163,7 @@ export function AssignmentForm() {
               <input
                 type="date"
                 value={form.end_date}
-                onChange={(event) => set('end_date', event.target.value)}
+                onChange={(event) => handleEndDateChange(event.target.value)}
               />
             </div>
             <div>

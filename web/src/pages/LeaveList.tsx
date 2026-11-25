@@ -309,12 +309,12 @@ export function LeaveList() {
       const targetId = selectedUserId;
       const numericUserId = targetId === 'me' ? (user ? Number(user.id) : undefined) : targetId;
 
-      const [qData, sData, aData, bookPrint, legData] = await Promise.all([
+      const [qData, sData, aData, legData, uData] = await Promise.all([
         api.getQuotaFor(targetId).catch(() => null),
         api.getStoredQuotas(targetId).catch(() => []),
         api.getQuotaHistory(targetId).catch(() => []),
-        api.getQuotaBookPrint(targetId).catch(() => null),
         api.getLeaveLegacyHistory(numericUserId ? { user_id: numericUserId } : {}).catch(() => []),
+        typeof targetId === 'number' ? api.getUser(targetId).catch(() => null) : null,
       ]);
 
       setHistoryQuota(qData);
@@ -322,12 +322,13 @@ export function LeaveList() {
       setQuotaAudits(aData);
       setLegacyHistory(legData);
 
-      if (bookPrint) {
+      if (uData) {
         setEmployeeProfile({
-          id: bookPrint.user.id,
-          name: bookPrint.user.name,
-          nip: bookPrint.user.nip,
-          unit_name: bookPrint.user.unit_name,
+          id: uData.id,
+          name: uData.name,
+          nip: uData.nip,
+          grade: uData.grade,
+          employment_type: uData.employment_type,
         });
       } else if (targetId === 'me' && user) {
         setEmployeeProfile({
@@ -447,10 +448,10 @@ export function LeaveList() {
       ? 'Daftar permohonan cuti yang menunggu keputusan berjenjang dan yang sudah disetujui'
       : currentTab === 'history'
       ? isAdmin && !selectedUserId
-        ? 'Cari dan pilih pegawai untuk meninjau riwayat cuti lengkap, buku saldo tahunan, dan mutasi kuota'
-        : 'Histori transaksi permohonan cuti, buku saldo tahunan, dan mutasi kuota pegawai'
+        ? 'Cari dan pilih pegawai untuk meninjau riwayat cuti lengkap, proyeksi saldo tahunan, dan mutasi kuota'
+        : 'Histori transaksi permohonan cuti, proyeksi saldo tahunan, dan mutasi kuota pegawai'
       : 'Daftar seluruh transaksi permohonan cuti kantor, pemantauan status, dan arsip kepegawaian'
-    : 'Histori seluruh transaksi permohonan cuti, status verifikasi, dan buku saldo kuota Anda';
+    : 'Histori seluruh transaksi permohonan cuti, status verifikasi, dan saldo kuota Anda';
 
   return (
     <Page title={pageTitle} sub={pageSub}>
@@ -516,10 +517,6 @@ export function LeaveList() {
                 <IconCalendarPlus size={16} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
                 Ajukan Cuti Baru
               </button>
-              <Link to="/quota/print/me" target="_blank" className="button secondary small">
-                <IconFileText size={16} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
-                Cetak Buku Cuti
-              </Link>
             </div>
           </div>
 
@@ -570,7 +567,7 @@ export function LeaveList() {
                 </strong>
                 <p style={{ margin: '2px 0 0', fontSize: '12.5px', color: '#64748b' }}>
                   {isAdmin
-                    ? 'Cari dan pilih pegawai untuk meninjau riwayat cuti lengkap, buku saldo, dan mutasi kuota.'
+                    ? 'Cari dan pilih pegawai untuk meninjau riwayat cuti lengkap, proyeksi saldo, dan mutasi kuota.'
                     : 'Anda dapat memilih pegawai untuk meninjau riwayat cuti lengkap lintas tahun.'}
                 </p>
               </div>
@@ -682,7 +679,7 @@ export function LeaveList() {
                   Pilih Pegawai untuk Melihat Riwayat Cuti
                 </h3>
                 <p style={{ margin: '0', fontSize: '13.5px', color: '#64748b', lineHeight: 1.6 }}>
-                  Sebagai Administrator, Anda tidak memiliki riwayat cuti pribadi. Silakan gunakan kolom pencarian di atas untuk memilih pegawai dan memeriksa riwayat permohonan, buku kuota, serta mutasi cutinya.
+                  Sebagai Administrator, Anda tidak memiliki riwayat cuti pribadi. Silakan gunakan kolom pencarian di atas untuk memilih pegawai dan memeriksa riwayat permohonan, proyeksi kuota, serta mutasi cutinya.
                 </p>
               </div>
             </div>
@@ -707,17 +704,6 @@ export function LeaveList() {
                         </span>
                       ) : null}
                     </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <Link
-                      to={`/quota/print/${selectedUserId}`}
-                      target="_blank"
-                      className="button secondary small"
-                    >
-                      <IconFileText size={16} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
-                      Cetak Buku Cuti (HTML)
-                    </Link>
                   </div>
                 </div>
 
@@ -762,7 +748,7 @@ export function LeaveList() {
                   className={historySubTab === 'stored' ? 'tab active' : 'tab'}
                   onClick={() => setHistorySubTab('stored')}
                 >
-                  Buku Saldo Tahunan ({storedQuotas.length})
+                  Proyeksi Saldo Tahunan ({storedQuotas.length})
                 </button>
                 <button
                   type="button"
@@ -1026,18 +1012,11 @@ export function LeaveList() {
                 </div>
               ) : null}
 
-              {/* SUBTAB 2: BUKU SALDO TAHUNAN */}
+              {/* SUBTAB 2: PROYEKSI SALDO TAHUNAN */}
               {historySubTab === 'stored' ? (
                 <div className="panel" style={{ marginTop: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                    <h3 style={{ margin: 0, fontSize: '14px' }}>Buku Saldo Cuti per Tahun</h3>
-                    <Link
-                      to={`/quota/print/${selectedUserId}`}
-                      target="_blank"
-                      className="button secondary small"
-                    >
-                      Cetak Buku Cuti Lengkap
-                    </Link>
+                  <div style={{ marginBottom: '14px' }}>
+                    <h3 style={{ margin: 0, fontSize: '14px' }}>Proyeksi Saldo Cuti Tersimpan per Tahun</h3>
                   </div>
 
                   {storedQuotas.length === 0 ? (

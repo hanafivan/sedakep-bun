@@ -1,5 +1,5 @@
-import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import { rows, type Executor } from '../../../shared/db';
 import type {
   GeneratedLetterRow,
   ServiceCheckRow,
@@ -13,12 +13,7 @@ import type {
  * Tidak ada logika bisnis di file ini.
  */
 
-type Executor = Pool | PoolConnection;
-
-const rows = async <T>(executor: Executor, sql: string, params: unknown[] = []): Promise<T[]> => {
-  const [result] = await executor.query<RowDataPacket[]>(sql, params);
-  return result as unknown as T[];
-};
+export { findInstanceProfile, findUserProfileById } from '../../../shared/db';
 
 export const findServiceRequests = async (
   filter: {
@@ -145,46 +140,4 @@ export const findGeneratedLetters = async (
     [entityTable, entityId],
   );
 
-export const findUserProfileById = async (
-  userId: number,
-  executor: Executor = getMySql(),
-): Promise<{
-  id: number;
-  name: string;
-  nip: string | null;
-  grade: string | null;
-  unit_name: string | null;
-  position_name: string | null;
-} | null> => {
-  const result = await rows<{
-    id: number;
-    name: string;
-    nip: string | null;
-    grade: string | null;
-    unit_name: string | null;
-    position_name: string | null;
-  }>(
-    executor,
-    `SELECT u.id, u.name, u.nip, u.grade, u.unit_name, p.name AS position_name
-       FROM users u
-       LEFT JOIN positions p ON p.id = u.position_id
-      WHERE u.id = ? LIMIT 1`,
-    [userId],
-  );
-  return result[0] ?? null;
-};
-
-/** Identitas instansi (kop cetak layanan) tersimpan sebagai settings `instance.*`. */
-export const findInstanceProfile = async (
-  executor: Executor = getMySql(),
-): Promise<Record<string, string | null>> => {
-  const result = await rows<{ key: string; value: string | null }>(
-    executor,
-    "SELECT `key`, value FROM settings WHERE `key` LIKE 'instance.%'",
-  );
-  const profile: Record<string, string | null> = {};
-  for (const row of result) {
-    profile[row.key.replace(/^instance\./, '')] = row.value;
-  }
-  return profile;
-};
+/** Profil user & instansi — re-exported dari shared/db. */

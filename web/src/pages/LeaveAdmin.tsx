@@ -12,11 +12,10 @@ import * as api from '../api';
  * dari API; halaman ini tidak menghitung saldo sendiri.
  */
 
-type Tab = 'approval' | 'book' | 'adjust' | 'policy' | 'pppk' | 'closure' | 'audit';
+type Tab = 'approval' | 'adjust' | 'policy' | 'pppk' | 'closure' | 'audit';
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'approval', label: 'Persetujuan admin' },
-  { key: 'book', label: 'Buku cuti' },
   { key: 'adjust', label: 'Kelola kuota user' },
   { key: 'policy', label: 'Pengaturan' },
   { key: 'pppk', label: 'TMT PPPK' },
@@ -48,7 +47,7 @@ export function LeaveAdmin() {
   return (
     <Page
       title="Pengaturan Kuota Cuti"
-      sub="Buku cuti, kelola kuota user, kebijakan, TMT PPPK, periode tutup, dan audit"
+      sub="Kelola kuota user, kebijakan, TMT PPPK, periode tutup, dan audit"
     >
       <div className="toolbar">
         <label htmlFor="admin-year">Tahun</label>
@@ -85,7 +84,6 @@ export function LeaveAdmin() {
       {error ? <p className="err">{error}</p> : null}
 
       {tab === 'approval' ? <ApprovalPanel year={year} onError={setError} onNotice={setNotice} /> : null}
-      {tab === 'book' ? <QuotaBookPanel year={year} onError={setError} onNotice={setNotice} /> : null}
       {tab === 'adjust' ? <AdjustmentPanel year={year} onError={setError} onNotice={setNotice} /> : null}
       {tab === 'policy' ? <PolicyPanel year={year} onError={setError} onNotice={setNotice} /> : null}
       {tab === 'pppk' ? <PppkPanel year={year} onError={setError} onNotice={setNotice} /> : null}
@@ -395,157 +393,6 @@ function ApprovalPanel({ onError, onNotice }: PanelProps) {
                         Detail
                       </button>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="pager">
-            <button
-              className="button secondary small"
-              type="button"
-              disabled={page <= 1}
-              onClick={() => setPage((value) => value - 1)}
-            >
-              Sebelumnya
-            </button>
-            <span>Halaman {page}</span>
-            <button
-              className="button secondary small"
-              type="button"
-              disabled={rows.length < perPage}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              Berikutnya
-            </button>
-          </div>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-/** Buku cuti: projection saldo seluruh pegawai untuk satu tahun. */
-function QuotaBookPanel({ year, onError, onNotice }: PanelProps) {
-  const perPage = 50;
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [rows, setRows] = useState<api.QuotaBookRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await api.getQuotaBook({
-        year,
-        search: search || undefined,
-        page,
-        per_page: perPage,
-      });
-      setRows(result.items);
-    } catch (err) {
-      onError(err instanceof Error ? err.message : 'Gagal memuat buku cuti');
-    } finally {
-      setLoading(false);
-    }
-  }, [year, search, page, onError]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const rebuildAll = async () => {
-    if (!window.confirm(`Rebuild projection kuota ${year} untuk semua pegawai?`)) return;
-    setBusy(true);
-    onNotice('');
-    try {
-      await api.rebuildQuota({ year, all_users: true });
-      await load();
-      onNotice(`Projection ${year} selesai dibangun ulang.`);
-    } catch (err) {
-      onError(err instanceof Error ? err.message : 'Rebuild gagal');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="panel">
-      <div className="panel-head">
-        <h2>Buku cuti {year}</h2>
-        <button className="button secondary small" type="button" disabled={busy} onClick={() => void rebuildAll()}>
-          {busy ? 'Membangun...' : 'Rebuild semua pegawai'}
-        </button>
-      </div>
-      <div className="toolbar">
-        <input
-          placeholder="Cari nama, NIP, atau id"
-          defaultValue={search}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              setPage(1);
-              setSearch((event.target as HTMLInputElement).value);
-            }
-          }}
-        />
-      </div>
-
-      {loading ? <p className="sub">Memuat...</p> : null}
-      {!loading && rows.length === 0 ? <p className="sub">Tidak ada baris untuk filter ini.</p> : null}
-
-      {rows.length > 0 ? (
-        <>
-          <table>
-            <thead>
-              <tr>
-                <th>Nama</th>
-                <th>NIP</th>
-                <th>Unit</th>
-                <th>Sisa N</th>
-                <th>Sisa N-1</th>
-                <th>Sisa N-2</th>
-                <th>Total</th>
-                <th>Terpesan</th>
-                <th>Layak</th>
-                <th>Dibangun</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.user_id}>
-                  <td>{row.name}</td>
-                  <td>{row.nip ?? '-'}</td>
-                  <td>{row.unit_name ?? '-'}</td>
-                  <td>{row.remaining_n}</td>
-                  <td>{row.remaining_n1}</td>
-                  <td>{row.remaining_n2}</td>
-                  <td>{row.total_remaining}</td>
-                  <td>{row.reserved_days}</td>
-                  <td>
-                    <span className={row.eligible ? 'badge ok' : 'badge muted'}>
-                      {row.eligible ? 'Ya' : 'Tidak'}
-                    </span>
-                  </td>
-                  <td>{row.computed_at ? formatDate(row.computed_at) : '-'}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <Link
-                        to={`/leave?tab=history&user_id=${row.user_id}`}
-                        className="button secondary small"
-                      >
-                        Riwayat
-                      </Link>
-                      <Link
-                        to={`/quota/print/${row.user_id}`}
-                        target="_blank"
-                        className="button secondary small"
-                      >
-                        Cetak
-                      </Link>
-                    </div>
                   </td>
                 </tr>
               ))}

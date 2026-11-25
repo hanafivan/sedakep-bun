@@ -30,7 +30,6 @@ export const leaveQuotaRoutes = app
   .openapi(routes.policy, handlers.policy)
   .openapi(routes.policyWrite, handlers.policyWrite)
   .openapi(routes.quotaHistory, handlers.quotaHistory)
-  .openapi(routes.quotaBookPrint, handlers.quotaBookPrint)
   .openapi(routes.quotaStored, handlers.quotaStored)
   .openapi(routes.quotaRebuild, handlers.quotaRebuild)
   .openapi(routes.rollover, handlers.rollover)

@@ -1,6 +1,5 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
-import type { Context } from 'hono';
-import { bearerAuth, type AuthUser } from '../../middleware/bearerAuth';
+import { bearerAuth } from '../../middleware/bearerAuth';
 import { requireRole } from '../../middleware/roleGuard';
 import { badRequest } from '../../shared/errors';
 import { defaultHook } from '../../shared/openapi-hook';
@@ -23,6 +22,7 @@ import {
   DispositionFinalCreateResponseSchema,
   DispositionFinalInputSchema,
   DispositionInputSchema,
+  DispositionPdfResponseSchema,
   DispositionUpdateResponseSchema,
   DispositionUpdateSchema,
   IdParamSchema,
@@ -40,6 +40,7 @@ import {
   UploadIncomingLetterFileSchema,
 } from './schema';
 import * as domain from './domain';
+import { actor, toUpload } from '../../shared/helpers';
 
 /**
  * Route modul disposisi — boundary HTTP saja. Surat masuk adalah korespondensi
@@ -56,8 +57,6 @@ for (const prefix of [
 ]) {
   dispositionRoutes.use(prefix, bearerAuth, requireRole('verifikator', 'atasan'));
 }
-
-const actor = (c: Context): AuthUser => c.get('user');
 
 // ---------------------------------------------------------------------------
 // Surat masuk
@@ -119,6 +118,18 @@ const deleteIncomingLetterRoute = createRoute({
     ...errors([401, 404]),
   },
 });
+
+const generateDispositionPdfRoute = createRoute({
+  ...POST_DISPOSITION_METHOD,
+  path: '/incoming-letters/{id}/pdf',
+  summary: 'Hasilkan PDF lembar disposisi resmi + QR verifikasi',
+  request: { params: IdParamSchema },
+  responses: {
+    ...okResponse(DispositionPdfResponseSchema, 'PDF lembar disposisi dibuat', 'DispositionPdfResponse'),
+    ...errors([401, 404], { 403: 'Bukan verifikator/atasan' }),
+  },
+});
+
 
 const finalizeIncomingLetterRoute = createRoute({
   ...POST_DISPOSITION_METHOD,
@@ -335,11 +346,7 @@ dispositionRoutes.openapi(uploadIncomingLetterFileRoute, async (c) => {
   const field = typeof form.field === 'string' ? form.field : 'sm';
   const result = await domain.attachIncomingLetterFile(
     id,
-    {
-      buffer: Buffer.from(await file.arrayBuffer()),
-      filename: file.name || 'berkas',
-      mimeType: file.type || null,
-    },
+    await toUpload(file),
     field,
     actor(c),
   );
@@ -419,3 +426,10 @@ dispositionRoutes.openapi(deleteClassificationRoute, async (c) => {
   await domain.removeClassification(id, actor(c));
   return c.json(successBody(null, 'Klasifikasi dihapus'), 200);
 });
+
+dispositionRoutes.openapi(generateDispositionPdfRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const result = await domain.generateDispositionPdf(id, actor(c));
+  return c.json(successBody(result, 'PDF lembar disposisi berhasil dibuat'), 200);
+});
+

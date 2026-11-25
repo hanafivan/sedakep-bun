@@ -100,7 +100,7 @@ describeDb('endpoint cuti lanjutan', () => {
   });
 
   it('menolak endpoint admin untuk pegawai (403)', async () => {
-    for (const path of ['/api/v1/leave/admin/users', '/api/v1/leave/admin/quota-book']) {
+    for (const path of ['/api/v1/leave/admin/users']) {
       const response = await request(path, {}, pegawaiToken);
       expect(response.status).toBe(403);
     }
@@ -228,7 +228,7 @@ describeDb('endpoint cuti lanjutan', () => {
     expect((await json(response)).data.document_id).toBeGreaterThan(0);
   });
 
-  it('mengelola periode tutup, identitas instansi, penyesuaian, dan buku cuti', async () => {
+  it('mengelola periode tutup, identitas instansi, dan penyesuaian', async () => {
     const created = await json(
       await post(
         '/api/v1/leave/admin/closure-periods',
@@ -255,11 +255,6 @@ describeDb('endpoint cuti lanjutan', () => {
     expect(adjustment.data.days).toBe(3);
     // 12 jatah − 1 hari terpakai (surat di tahun 2033) + 3 penyesuaian = 14.
     expect(adjustment.data.quota.official.n).toBe(14);
-
-    const book = await json(
-      await request(`/api/v1/leave/admin/quota-book?year=2033&search=${pegawaiId}`, {}, adminToken),
-    );
-    expect(book.data.items.length).toBeGreaterThan(0);
   });
 
   it('mencatat TMT PPPK lewat pengaturan', async () => {
@@ -286,14 +281,6 @@ describeDb('endpoint cuti lanjutan', () => {
     expect(Array.isArray(body.data.by_type)).toBe(true);
     expect(body.data.by_archive).toBeDefined();
     expect(typeof body.data.by_archive.belum_diperiksa).toBe('number');
-  });
-
-  it('menyajikan data cetak buku cuti untuk pemiliknya', async () => {
-    const response = await request('/api/v1/leave/quota/book/me', {}, pegawaiToken);
-    expect(response.status).toBe(200);
-    const body = await json(response);
-    expect(body.data.user).toBeDefined();
-    expect(Array.isArray(body.data.stored)).toBe(true);
   });
 });
 

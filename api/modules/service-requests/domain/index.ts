@@ -1,5 +1,14 @@
 import type { AuthUser } from '../../../middleware/bearerAuth';
 import { badRequest, forbidden, notFound } from '../../../shared/errors';
+import {
+  canEditByOwnerOrAdmin,
+  canViewByOwnerOrStaff,
+  formatDateId,
+  normalizePagination,
+  nowStamp,
+  paginatedResult,
+  today,
+} from '../../../shared/helpers';
 import { SERVICE_TYPES, documentLabelsFor, getServiceTypeDef } from './service-types';
 export * from './service-types';
 import {
@@ -45,8 +54,6 @@ export type ServiceRequestInput = Partial<{
   fields: Record<string, string>;
 }>;
 
-const nowStamp = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
-
 const toPublic = (row: ServiceRequestRow) => ({
   id: row.id,
   service_type: row.service_type,
@@ -77,10 +84,10 @@ const toPublic = (row: ServiceRequestRow) => ({
 });
 
 export const canViewService = (actor: AuthUser, request: { user_id: number }): boolean =>
-  actor.role !== 'pegawai' || Number(actor.id) === Number(request.user_id);
+  canViewByOwnerOrStaff(actor, request.user_id);
 
 export const canEditService = (actor: AuthUser, request: { user_id: number }): boolean =>
-  actor.role === 'admin' || Number(actor.id) === Number(request.user_id);
+  canEditByOwnerOrAdmin(actor, request.user_id);
 
 const requireRequest = async (id: number): Promise<ServiceRequestRow> => {
   const request = await findServiceRequestById(id);
@@ -117,19 +124,12 @@ export const listServiceRequests = async (filter: {
   page?: number;
   perPage?: number;
 }) => {
-  const perPage = Math.min(Math.max(filter.perPage ?? 25, 1), 200);
-  const page = Math.max(filter.page ?? 1, 1);
+  const { page, perPage, offset } = normalizePagination(filter);
   const [items, total] = await Promise.all([
-    findServiceRequests({ ...filter, limit: perPage, offset: (page - 1) * perPage }),
+    findServiceRequests({ ...filter, limit: perPage, offset }),
     countServiceRequests(filter),
   ]);
-  return {
-    items: items.map(toPublic),
-    total,
-    page,
-    per_page: perPage,
-    total_pages: Math.ceil(total / perPage),
-  };
+  return paginatedResult(items.map(toPublic), total, page, perPage);
 };
 
 export const getServiceRequestDetail = async (id: number) => {
@@ -358,7 +358,7 @@ export const addGeneratedLetter = async (
     entity_table: 'service_requests',
     entity_id: id,
     number: input.number ?? null,
-    issued_at: input.issued_at ?? new Date().toISOString().slice(0, 10),
+    issued_at: input.issued_at ?? today(),
   });
   await insertAuditLog({
     actor_id: Number(actor.id),
@@ -368,18 +368,6 @@ export const addGeneratedLetter = async (
     after_data: input,
   });
   return { id: letterId };
-};
-
-const MONTHS_ID = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-];
-const formatDateId = (value: string | null | undefined): string => {
-  if (!value) return '-';
-  const parts = String(value).slice(0, 10).split('-');
-  if (parts.length !== 3) return String(value);
-  const [y, m, d] = parts;
-  return `${Number(d)} ${MONTHS_ID[Number(m) - 1] ?? m} ${y}`;
 };
 
 const LETTER_TITLES: Record<string, string> = {
@@ -396,37 +384,62 @@ export const generateServiceLetterPdf = async (id: number, actor: AuthUser) => {
   const letterType = (def?.letters[0] ?? 'sk') as 'sphd' | 'sppid' | 'sk' | 'suket';
   const instance = (detail.instance ?? {}) as Record<string, string | null>;
 
-  const { buildLetterPdf } = await import('../../../shared/pdf');
   const { verifyUrl } = await import('../../../shared/verify');
   const link = verifyUrl('service_requests', id);
 
-  const fieldRows = (def?.fields ?? []).map((field) => [
-    field.label,
-    (detail.fields as Record<string, string | null>)[field.key] ?? '-',
-  ]);
+  let pdf: Uint8Array;
+  if (letterType === 'sphd' || letterType === 'sppid') {
+    const { buildServiceStatementLetterPdf } = await import('../../../shared/pdf');
+    const fields = detail.fields as Record<string, string | null>;
+    pdf = await buildServiceStatementLetterPdf({
+      id: detail.id,
+      letter_type: letterType,
+      letter_number: detail.title || String(id),
+      signer_name: instance.head_name || 'H. Sidik Pramono, S.Ag., M.Si.',
+      signer_nip: instance.head_nip || '196903271997031002',
+      signer_position: instance.status || 'Kepala Kantor Kementerian Agama Kab. Sleman',
+      employee_name: detail.name,
+      employee_nip: detail.nip,
+      birth_place: fields.tempat_lahir || fields.birth_place || null,
+      birth_date: fields.tgl_lahir || fields.birth_date || null,
+      employee_grade: detail.grade,
+      employee_position: detail.position,
+      employee_organization: detail.organization_name,
+      issued_at: today(),
+      instance_address: instance.address,
+      verify_url: link,
+      is_draft: detail.decision !== 'accepted',
+    });
+  } else {
+    const { buildLetterPdf } = await import('../../../shared/pdf');
+    const fieldRows = (def?.fields ?? []).map((field) => [
+      field.label,
+      (detail.fields as Record<string, string | null>)[field.key] ?? '-',
+    ]);
 
-  const pdf = await buildLetterPdf({
-    kop: [instance.name ?? 'KEMENTERIAN AGAMA', instance.address ?? ''].filter((value) =>
-      Boolean(value),
-    ),
-    title: LETTER_TITLES[letterType] ?? 'SURAT',
-    subtitle: `${def?.label ?? detail.service_type}${detail.title ? ` — ${detail.title}` : ''}`,
-    paragraphs: [
-      'Yang bertanda tangan di bawah ini, memperhatikan permohonan yang bersangkutan, menetapkan kepada:',
-      `Nama: ${detail.name}`,
-      `NIP: ${detail.nip ?? '-'}`,
-      `Jabatan: ${detail.position ?? '-'}`,
-      `Unit kerja: ${detail.organization_name ?? '-'}`,
-    ],
-    table: fieldRows.length > 0 ? { headers: ['Keterangan', 'Nilai'], rows: fieldRows } : undefined,
-    signer: {
-      city: instance.address ?? '',
-      date: formatDateId(new Date().toISOString()),
-      position: instance.status ?? '',
-      name: instance.head_name ?? '',
-    },
-    qr: { text: link },
-  });
+    pdf = await buildLetterPdf({
+      kop: [instance.name ?? 'KEMENTERIAN AGAMA', instance.address ?? ''].filter((value) =>
+        Boolean(value),
+      ),
+      title: LETTER_TITLES[letterType] ?? 'SURAT',
+      subtitle: `${def?.label ?? detail.service_type}${detail.title ? ` — ${detail.title}` : ''}`,
+      paragraphs: [
+        'Yang bertanda tangan di bawah ini, memperhatikan permohonan yang bersangkutan, menetapkan kepada:',
+        `Nama: ${detail.name}`,
+        `NIP: ${detail.nip ?? '-'}`,
+        `Jabatan: ${detail.position ?? '-'}`,
+        `Unit kerja: ${detail.organization_name ?? '-'}`,
+      ],
+      table: fieldRows.length > 0 ? { headers: ['Keterangan', 'Nilai'], rows: fieldRows } : undefined,
+      signer: {
+        city: instance.address ?? '',
+        date: formatDateId(today()),
+        position: instance.status ?? '',
+        name: instance.head_name ?? '',
+      },
+      qr: { text: link },
+    });
+  }
 
   const { uploadDocument, getDownloadUrl } = await import('../../documents/domain');
   const uploaded = await uploadDocument({
@@ -446,7 +459,7 @@ export const generateServiceLetterPdf = async (id: number, actor: AuthUser) => {
     entity_id: id,
     number: detail.title ?? null,
     document_id: uploaded.id,
-    issued_at: new Date().toISOString().slice(0, 10),
+    issued_at: today(),
   });
 
   const download = await getDownloadUrl(uploaded.id);

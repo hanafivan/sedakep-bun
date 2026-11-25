@@ -1,12 +1,10 @@
-import type { PoolConnection } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import type { Executor } from '../../../shared/db';
 
 /**
  * COMMAND = operasi tulis modul dokumen.
  * Query SQL INSERT/UPDATE/DELETE untuk dokumen dan tautannya ada di sini.
  */
-
-type Executor = PoolConnection | ReturnType<typeof getMySql>;
 
 export const insertDocument = async (
   data: {

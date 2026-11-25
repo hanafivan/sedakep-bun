@@ -1,4 +1,5 @@
 import { badRequest, notFound } from '../../../shared/errors';
+import { normalizePagination, paginatedResult } from '../../../shared/helpers';
 import {
   deleteClosurePeriod,
   insertAuditLog,
@@ -11,7 +12,6 @@ import {
   findInstanceProfile,
   findPppkTmtEntries,
   findPppkUsersMissingTmt,
-  findQuotaBookRows,
   findRecentQuotaAudits,
   findUserDirectory,
   countUserDirectory,
@@ -133,25 +133,13 @@ export const removeClosurePeriod = async (id: number, actorId: number) => {
 // Buku cuti dan daftar pegawai
 // ---------------------------------------------------------------------------
 
-export const getQuotaBook = async (year: number, filter: { search?: string; page?: number; perPage?: number }) => {
-  const perPage = Math.min(Math.max(filter.perPage ?? 50, 1), 500);
-  const page = Math.max(filter.page ?? 1, 1);
-  const rows = await findQuotaBookRows(year, {
-    search: filter.search,
-    limit: perPage,
-    offset: (page - 1) * perPage,
-  });
-  return { items: rows, page, per_page: perPage, year };
-};
-
 export const listUsers = async (filter: { search?: string; page?: number; perPage?: number }) => {
-  const perPage = Math.min(Math.max(filter.perPage ?? 25, 1), 200);
-  const page = Math.max(filter.page ?? 1, 1);
+  const { page, perPage, offset } = normalizePagination(filter);
   const [items, total] = await Promise.all([
-    findUserDirectory({ search: filter.search, limit: perPage, offset: (page - 1) * perPage }),
+    findUserDirectory({ search: filter.search, limit: perPage, offset }),
     countUserDirectory({ search: filter.search }),
   ]);
-  return { items, total, page, per_page: perPage, total_pages: Math.ceil(total / perPage) };
+  return paginatedResult(items, total, page, perPage);
 };
 
 /** Riwayat mutasi kuota lintas pegawai — dasar halaman audit. */

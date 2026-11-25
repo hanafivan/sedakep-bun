@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
-import type { Context } from 'hono';
-import { bearerAuth, type AuthUser } from '../../middleware/bearerAuth';
+import { bearerAuth } from '../../middleware/bearerAuth';
 import { badRequest } from '../../shared/errors';
+import { actor, seesAll, toUpload } from '../../shared/helpers';
 import { defaultHook } from '../../shared/openapi-hook';
 import { errors, json, okResponse } from '../../shared/openapi';
 import {
@@ -34,10 +34,6 @@ export const agendaRoutes = new OpenAPIHono({ defaultHook });
 for (const prefix of ['/agendas', '/agendas/*']) {
   agendaRoutes.use(prefix, bearerAuth);
 }
-
-const actor = (c: Context): AuthUser => c.get('user');
-const seesAll = (user: AuthUser) =>
-  user.role === 'admin' || user.role === 'verifikator' || user.role === 'atasan';
 
 const listAgendasRoute = createRoute({
   ...GET_AGENDA_METHOD,
@@ -178,11 +174,7 @@ agendaRoutes.openapi(uploadAgendaFileRoute, async (c) => {
   if (!(file instanceof File)) throw badRequest('Berkas wajib dilampirkan');
   const result = await domain.attachAgendaFile(
     id,
-    {
-      buffer: Buffer.from(await file.arrayBuffer()),
-      filename: file.name || 'berkas',
-      mimeType: file.type || null,
-    },
+    await toUpload(file),
     actor(c),
   );
   return c.json(successBody(result, 'Berkas agenda tersimpan'), 200);

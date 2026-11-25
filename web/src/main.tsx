@@ -12,7 +12,6 @@ import { AlibiDetail } from './pages/AlibiDetail';
 import { AlibiForm } from './pages/AlibiForm';
 import { AlibiPrint } from './pages/AlibiPrint';
 import { Approvals } from './pages/Approvals';
-import { AdminBackup } from './pages/AdminBackup';
 import { AssignmentDetail } from './pages/AssignmentDetail';
 import { AssignmentForm } from './pages/AssignmentForm';
 import { Assignments } from './pages/Assignments';
@@ -37,8 +36,6 @@ import { MasterData } from './pages/MasterData';
 import { Migration } from './pages/Migration';
 import { Panduan } from './pages/Panduan';
 import { Profile } from './pages/Profile';
-import { Quota } from './pages/Quota';
-import { QuotaPrint } from './pages/QuotaPrint';
 import { Riwayat } from './pages/Riwayat';
 import { ServiceRequestDetail } from './pages/ServiceRequestDetail';
 import { ServiceRequestForm } from './pages/ServiceRequestForm';
@@ -64,7 +61,6 @@ createRoot(root).render(
             <Route path="alibi/:id/print" element={<AlibiPrint />} />
             <Route path="leave/:id/print" element={<LeavePrint />} />
             <Route path="leave/:id/print-form" element={<LeaveFormPrint />} />
-            <Route path="quota/print/:userId" element={<QuotaPrint />} />
             <Route element={<RequireAuth roles={['verifikator', 'atasan']} />}>
               <Route path="incoming-letters/:id/print" element={<DispositionPrint />} />
             </Route>
@@ -106,7 +102,6 @@ createRoot(root).render(
                 <Route path="admin/users" element={<Users />} />
                 <Route path="admin/master" element={<MasterData />} />
                 <Route path="admin/settings" element={<Settings />} />
-                <Route path="admin/backup" element={<AdminBackup />} />
               </Route>
               <Route element={<RequireAuth roles={['verifikator', 'atasan']} />}>
                 <Route path="incoming-letters" element={<IncomingLetters />} />
@@ -115,7 +110,6 @@ createRoot(root).render(
                 <Route path="incoming-letters/:id/edit" element={<IncomingLetterForm />} />
                 <Route path="letter-classifications" element={<LetterClassifications />} />
               </Route>
-              <Route path="quota" element={<Quota />} />
               <Route path="faq" element={<Faq />} />
               <Route
                 path="approvals"

@@ -1,4 +1,5 @@
 import { badRequest } from '../../../shared/errors';
+import { yearOf } from '../../../shared/helpers';
 import { insertAuditLog } from '../command';
 import { getQuota } from './quota.domain';
 import { canViewRequest, getLeaveRequestDetail } from './leave.domain';
@@ -8,21 +9,6 @@ import { canViewRequest, getLeaveRequestDetail } from './leave.domain';
  *
  * Mengorkestrasi pembuatan PDF, kode QR verifikasi, dan penyimpanan dokumen ke MinIO.
  */
-
-const yearOf = (value: string | Date): number => Number(String(value).slice(0, 4));
-
-const MONTHS_ID = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-];
-
-const formatDateId = (value: string | null | undefined): string => {
-  if (!value) return '-';
-  const parts = String(value).slice(0, 10).split('-');
-  if (parts.length !== 3) return String(value);
-  const [y, m, d] = parts;
-  return `${Number(d)} ${MONTHS_ID[Number(m) - 1] ?? m} ${y}`;
-};
 
 /**
  * Saldo yang dicetak pada formulir.

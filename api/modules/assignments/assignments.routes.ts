@@ -1,6 +1,5 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
-import type { Context } from 'hono';
-import { bearerAuth, type AuthUser } from '../../middleware/bearerAuth';
+import { bearerAuth } from '../../middleware/bearerAuth';
 import { requireRole } from '../../middleware/roleGuard';
 import { badRequest } from '../../shared/errors';
 import { defaultHook } from '../../shared/openapi-hook';
@@ -21,6 +20,7 @@ import {
   POST_ASSIGNMENT_NOTE_METHOD,
 } from '../../shared/constant';
 import { successBody } from '../../shared/response';
+import { actor, seesAll, toUpload } from '../../shared/helpers';
 import {
   AssignmentCancelResponseSchema,
   AssignmentCopyCreateResponseSchema,
@@ -28,6 +28,8 @@ import {
   AssignmentCopyUpdateResponseSchema,
   AssignmentDecisionResponseSchema,
   AssignmentDecisionSchema,
+  AssignmentEmployeeListResponseSchema,
+  AssignmentEmployeeQuerySchema,
   AssignmentFileResponseSchema,
   AssignmentLetterCreateResponseSchema,
   AssignmentLetterDetailResponseSchema,
@@ -76,10 +78,6 @@ for (const prefix of [
   assignmentRoutes.use(prefix, requireRole('admin'));
 }
 
-const actor = (c: Context): AuthUser => c.get('user');
-const seesAll = (user: AuthUser) =>
-  user.role === 'admin' || user.role === 'verifikator' || user.role === 'atasan';
-
 // ---------------------------------------------------------------------------
 // Surat tugas
 // ---------------------------------------------------------------------------
@@ -93,6 +91,19 @@ const listAssignmentLettersRoute = createRoute({
   },
   responses: {
     ...okResponse(AssignmentLetterListResponseSchema, 'Daftar surat tugas', 'AssignmentLetterListResponse'),
+    ...errors([401]),
+  },
+});
+
+const searchEmployeesRoute = createRoute({
+  method: 'get',
+  path: '/assignment-letters/employees',
+  summary: 'Cari data pegawai internal untuk penugasan',
+  request: {
+    query: AssignmentEmployeeQuerySchema,
+  },
+  responses: {
+    ...okResponse(AssignmentEmployeeListResponseSchema, 'Daftar pegawai', 'AssignmentEmployeeListResponse'),
     ...errors([401]),
   },
 });
@@ -208,10 +219,17 @@ const uploadAssignmentFileRoute = createRoute({
 assignmentRoutes.openapi(listAssignmentLettersRoute, async (c) => {
   const query = c.req.valid('query');
   const user = actor(c);
-  const scopedUserId = query.user_id ?? (seesAll(user) ? undefined : Number(user.id));
+  const isAll = seesAll(user);
+  const scopedUserId = query.user_id ?? (isAll ? undefined : Number(user.id));
+  let userNip: string | undefined;
+  if (!isAll && !query.user_id) {
+    const identity = await domain.getUserIdentity(Number(user.id));
+    userNip = identity?.nip ?? undefined;
+  }
 
   const result = await domain.listAssignmentLetters({
     userId: scopedUserId,
+    userNip,
     status: query.status,
     year: query.year,
     search: query.search,
@@ -219,6 +237,12 @@ assignmentRoutes.openapi(listAssignmentLettersRoute, async (c) => {
     perPage: query.per_page,
   });
   return c.json(successBody(result, 'Daftar surat tugas'), 200);
+});
+
+assignmentRoutes.openapi(searchEmployeesRoute, async (c) => {
+  const { search } = c.req.valid('query');
+  const result = await domain.searchEmployees(search);
+  return c.json(successBody(result, 'Daftar pegawai'), 200);
 });
 
 assignmentRoutes.openapi(createAssignmentLetterRoute, async (c) => {
@@ -233,7 +257,13 @@ assignmentRoutes.openapi(createAssignmentLetterRoute, async (c) => {
 assignmentRoutes.openapi(getAssignmentLetterRoute, async (c) => {
   const { id } = c.req.valid('param');
   const detail = await domain.getAssignmentLetterDetail(id);
-  if (!domain.canViewLetter(actor(c), detail)) {
+  const user = actor(c);
+  let userNip: string | null = null;
+  if (user.role === 'pegawai') {
+    const identity = await domain.getUserIdentity(Number(user.id));
+    userNip = identity?.nip ?? null;
+  }
+  if (!domain.canViewLetter(user, detail, detail.members, userNip)) {
     throw badRequest('Tidak berhak melihat surat tugas milik pegawai lain');
   }
   return c.json(successBody(detail, 'Detail surat tugas'), 200);
@@ -285,11 +315,7 @@ assignmentRoutes.openapi(uploadAssignmentFileRoute, async (c) => {
   if (!(file instanceof File)) throw badRequest('Berkas wajib dilampirkan');
   const result = await domain.attachAssignmentFile(
     id,
-    {
-      buffer: Buffer.from(await file.arrayBuffer()),
-      filename: file.name || 'berkas',
-      mimeType: file.type || null,
-    },
+    await toUpload(file),
     actor(c),
   );
   return c.json(successBody(result, 'Berkas surat tugas tersimpan'), 200);

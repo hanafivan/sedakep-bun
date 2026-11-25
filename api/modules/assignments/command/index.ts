@@ -1,12 +1,13 @@
-import type { Pool, PoolConnection } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import { pickUpdateColumns, type Executor } from '../../../shared/db';
 
 /**
  * COMMAND = operasi tulis modul surat tugas. Semua INSERT/UPDATE/DELETE ada di
  * sini. Tidak ada logika bisnis di file ini.
  */
 
-export type Executor = Pool | PoolConnection;
+export type { Executor };
+export { insertAuditLog } from '../../../shared/db';
 
 export type NewAssignmentLetter = {
   user_id: number;
@@ -76,18 +77,11 @@ export const updateAssignmentLetter = async (
   data: Record<string, unknown>,
   executor: Executor = getMySql(),
 ): Promise<void> => {
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  for (const [key, column] of Object.entries(LETTER_COLUMNS)) {
-    if (data[key] !== undefined) {
-      columns.push(`${column} = ?`);
-      values.push(data[key]);
-    }
-  }
-  if (columns.length === 0) return;
+  const patch = pickUpdateColumns(data, LETTER_COLUMNS);
+  if (!patch) return;
   await executor.query(
-    `UPDATE assignment_letters SET ${columns.join(', ')} WHERE id = ?`,
-    [...values, id],
+    `UPDATE assignment_letters SET ${patch.setClause} WHERE id = ?`,
+    [...patch.values, id],
   );
 };
 
@@ -196,17 +190,10 @@ export const updateAssignmentMember = async (
   executor: Executor = getMySql(),
 ): Promise<void> => {
   const allowed = ['name', 'nip', 'grade', 'position', 'organization_name', 'sort_order'];
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  for (const key of allowed) {
-    if (data[key] !== undefined) {
-      columns.push(`${key} = ?`);
-      values.push(data[key]);
-    }
-  }
-  if (columns.length === 0) return;
-  await executor.query(`UPDATE assignment_members SET ${columns.join(', ')} WHERE id = ?`, [
-    ...values,
+  const patch = pickUpdateColumns(data, allowed);
+  if (!patch) return;
+  await executor.query(`UPDATE assignment_members SET ${patch.setClause} WHERE id = ?`, [
+    ...patch.values,
     id,
   ]);
 };
@@ -238,19 +225,10 @@ export const updateAssignmentNote = async (
   data: { note?: string; sort_order?: number },
   executor: Executor = getMySql(),
 ): Promise<void> => {
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  if (data.note !== undefined) {
-    columns.push('note = ?');
-    values.push(data.note);
-  }
-  if (data.sort_order !== undefined) {
-    columns.push('sort_order = ?');
-    values.push(data.sort_order);
-  }
-  if (columns.length === 0) return;
-  await executor.query(`UPDATE assignment_notes SET ${columns.join(', ')} WHERE id = ?`, [
-    ...values,
+  const patch = pickUpdateColumns(data, ['note', 'sort_order']);
+  if (!patch) return;
+  await executor.query(`UPDATE assignment_notes SET ${patch.setClause} WHERE id = ?`, [
+    ...patch.values,
     id,
   ]);
 };
@@ -282,19 +260,10 @@ export const updateAssignmentCopy = async (
   data: { copy_to?: string; sort_order?: number },
   executor: Executor = getMySql(),
 ): Promise<void> => {
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  if (data.copy_to !== undefined) {
-    columns.push('copy_to = ?');
-    values.push(data.copy_to);
-  }
-  if (data.sort_order !== undefined) {
-    columns.push('sort_order = ?');
-    values.push(data.sort_order);
-  }
-  if (columns.length === 0) return;
-  await executor.query(`UPDATE assignment_copies SET ${columns.join(', ')} WHERE id = ?`, [
-    ...values,
+  const patch = pickUpdateColumns(data, ['copy_to', 'sort_order']);
+  if (!patch) return;
+  await executor.query(`UPDATE assignment_copies SET ${patch.setClause} WHERE id = ?`, [
+    ...patch.values,
     id,
   ]);
 };
@@ -307,30 +276,6 @@ export const deleteAssignmentCopy = async (
 };
 
 // ---------------------------------------------------------------------------
-// Audit
+// Audit — re-exported from shared/db
 // ---------------------------------------------------------------------------
 
-export const insertAuditLog = async (
-  data: {
-    actor_id?: number | null;
-    action: string;
-    entity_table: string;
-    entity_id?: number | null;
-    before_data?: unknown;
-    after_data?: unknown;
-  },
-  executor: Executor = getMySql(),
-): Promise<void> => {
-  await executor.execute(
-    `INSERT INTO audit_logs (actor_id, action, entity_table, entity_id, before_data, after_data)
-     VALUES (?,?,?,?,?,?)`,
-    [
-      data.actor_id ?? null,
-      data.action,
-      data.entity_table,
-      data.entity_id ?? null,
-      data.before_data === undefined ? null : JSON.stringify(data.before_data),
-      data.after_data === undefined ? null : JSON.stringify(data.after_data),
-    ],
-  );
-};

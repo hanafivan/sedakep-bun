@@ -1,13 +1,12 @@
 import type { AuthUser } from '../../middleware/bearerAuth';
 import { canSeeAll } from '../../middleware/roleGuard';
 import { badRequest, forbidden } from '../../shared/errors';
+import { actor, yearNow } from '../../shared/helpers';
 import { successBody } from '../../shared/response';
 import type { AppRouteHandler } from '../../shared/types';
 import { findQuotaAdjustments } from '../leave-requests/query';
 import * as domain from './domain';
 import * as routes from './leave-quota.routes';
-
-const actor = (c: { get: (key: 'user') => AuthUser }): AuthUser => c.get('user');
 
 const resolveUserId = (param: string | number, actorId: number): number => {
   if (param === 'me') return actorId;
@@ -19,8 +18,6 @@ const resolveUserId = (param: string | number, actorId: number): number => {
 const applyScope = (userId: number, user: AuthUser): number => {
   return canSeeAll(user.role) || Number(user.id) === userId ? userId : Number(user.id);
 };
-
-const yearNow = () => new Date().getFullYear();
 
 export const quotaAvailable: AppRouteHandler<routes.QuotaAvailableRoute> = async (c) => {
   const query = c.req.valid('query');
@@ -151,14 +148,6 @@ export const quotaHistory: AppRouteHandler<routes.QuotaHistoryRoute> = async (c)
     successBody(history as Array<Record<string, unknown>>, 'Riwayat kuota cuti'),
     200,
   );
-};
-
-export const quotaBookPrint: AppRouteHandler<routes.QuotaBookPrintRoute> = async (c) => {
-  const { user_id } = c.req.valid('param');
-  const user = actor(c);
-  const target = applyScope(resolveUserId(user_id, Number(user.id)), user);
-  const data = await domain.getQuotaBookPrint(target);
-  return c.json(successBody(data, 'Data cetak buku cuti'), 200);
 };
 
 export const quotaStored: AppRouteHandler<routes.QuotaStoredRoute> = async (c) => {

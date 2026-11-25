@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
-import type { Context } from 'hono';
-import { bearerAuth, type AuthUser } from '../../middleware/bearerAuth';
+import { bearerAuth } from '../../middleware/bearerAuth';
 import { requireRole } from '../../middleware/roleGuard';
+import { actor } from '../../shared/helpers';
 import { defaultHook } from '../../shared/openapi-hook';
 import { errors, json, okResponse } from '../../shared/openapi';
 import {
@@ -32,8 +32,6 @@ for (const prefix of ['/settings', '/settings/*']) {
   settingsRoutes.use(prefix, bearerAuth);
   settingsRoutes.use(prefix, requireRole('admin'));
 }
-
-const actor = (c: Context): AuthUser => c.get('user');
 
 const listSettingsRoute = createRoute({
   ...GET_SETTING_METHOD,

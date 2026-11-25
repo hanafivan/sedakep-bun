@@ -306,13 +306,6 @@ export const QuotaHistoryResponseSchema = z.array(
   }).passthrough()
 ).openapi('QuotaHistoryResponse');
 
-export const QuotaBookPrintResponseSchema = z.object({
-  user: z.record(z.string(), z.unknown()).optional(),
-  instance: z.record(z.string(), z.unknown()).optional(),
-  years: z.array(z.record(z.string(), z.unknown())).optional(),
-  current: z.record(z.string(), z.unknown()).optional(),
-}).passthrough().openapi('QuotaBookPrintResponse');
-
 export const StoredQuotaResponseSchema = z.array(StoredQuotaSchema).openapi('StoredQuotaResponse');
 
 export const QuotaRebuildResponseSchema = z.object({
@@ -477,19 +470,6 @@ export const ClosurePeriodCreateResponseSchema = z.object({
 export const ClosurePeriodUpdateResponseSchema = z.object({
   id: z.number(),
 }).openapi('ClosurePeriodUpdateResponse');
-
-export const QuotaBookQuerySchema = z.object({
-  year: z.coerce.number().int().optional(),
-  search: z.string().optional(),
-  page: z.coerce.number().int().positive().optional(),
-  per_page: z.coerce.number().int().positive().max(500).optional(),
-}).openapi('QuotaBookQuery');
-
-export const QuotaBookResponseSchema = z.object({
-  year: z.number(),
-  items: z.array(z.record(z.string(), z.unknown())),
-  summary: z.record(z.string(), z.unknown()).optional(),
-}).passthrough().openapi('QuotaBookResponse');
 
 export const LeaveUserDirectoryQuerySchema = z.object({
   search: z.string().optional(),

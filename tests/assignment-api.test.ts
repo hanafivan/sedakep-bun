@@ -217,6 +217,41 @@ describeDb('surat tugas lewat API', () => {
     expect(list.data.total).toBe(0);
   });
 
+  it('pegawai yang terdaftar sebagai anggota dapat melihat surat tugas di daftar dan detail', async () => {
+    // p1 buat surat tugas baru dan daftarkan p2 sebagai anggota
+    const created = await json(
+      await post('/api/v1/assignment-letters', { code: 'ST-MEMBER', content: 'Tugas bersama' }, p1Token),
+    );
+    const assignedLetterId = created.data.id;
+
+    await post(
+      `/api/v1/assignment-letters/${assignedLetterId}/members`,
+      { name: 'Pegawai Stug Dua', nip: '199101012016011012', position: 'Pranata Komputer' },
+      p1Token,
+    );
+
+    // p2 sekarang dapat melihat detail surat tugas
+    const view = await request(`/api/v1/assignment-letters/${assignedLetterId}`, {}, p2Token);
+    expect(view.status).toBe(200);
+    const detail = await json(view);
+    expect(detail.data.id).toBe(assignedLetterId);
+
+    // p2 juga melihat surat tugas tersebut di list-nya
+    const list = await json(
+      await request('/api/v1/assignment-letters', {}, p2Token),
+    );
+    expect(list.data.items.some((item: any) => item.id === assignedLetterId)).toBe(true);
+  });
+
+  it('dapat mencari pegawai internal untuk autofill penugasan', async () => {
+    const res = await request('/api/v1/assignment-letters/employees?search=Stug', {}, p1Token);
+    expect(res.status).toBe(200);
+    const data = await json(res);
+    expect(Array.isArray(data.data)).toBe(true);
+    expect(data.data.length).toBeGreaterThanOrEqual(1);
+    expect(data.data.some((e: any) => e.name.includes('Pegawai Stug'))).toBe(true);
+  });
+
   it('membatalkan surat belum disetujui dan menyertakan identitas instansi', async () => {
     const created = await json(
       await post('/api/v1/assignment-letters', { code: 'ST-BATAL' }, p1Token),

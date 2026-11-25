@@ -6,6 +6,7 @@ import {
   notFound,
   unauthorized,
 } from '../../../shared/errors';
+import { normalizePagination, paginatedResult } from '../../../shared/helpers';
 import {
   detectAlgo,
   hashPassword,
@@ -128,21 +129,14 @@ export class UserService {
     page?: number;
     perPage?: number;
   }) {
-    const perPage = Math.min(Math.max(filter.perPage ?? 25, 1), 200);
-    const page = Math.max(filter.page ?? 1, 1);
+    const { page, perPage, offset } = normalizePagination(filter);
 
     const [items, total] = await Promise.all([
-      listUsers({ ...filter, limit: perPage, offset: (page - 1) * perPage }),
+      listUsers({ ...filter, limit: perPage, offset }),
       countUsersByFilter(filter),
     ]);
 
-    return {
-      items: items.map(toUserResponse),
-      total,
-      page,
-      per_page: perPage,
-      total_pages: Math.ceil(total / perPage),
-    };
+    return paginatedResult(items.map(toUserResponse), total, page, perPage);
   }
 
   async update(id: number, input: Record<string, unknown>): Promise<UserResponse> {

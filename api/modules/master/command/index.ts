@@ -1,9 +1,9 @@
-import type { Pool, PoolConnection } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import { pickUpdateColumns, type Executor } from '../../../shared/db';
 
 /** COMMAND = operasi tulis master data. Tanpa logika bisnis. */
 
-export type Executor = Pool | PoolConnection;
+export type { Executor };
 
 export const insertOrganization = async (
   data: { code: string; name: string; parent_id?: number | null; level?: number; is_active?: number },
@@ -21,16 +21,12 @@ export const updateOrganization = async (
   data: Record<string, unknown>,
   executor: Executor = getMySql(),
 ): Promise<void> => {
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  for (const key of ['code', 'name', 'parent_id', 'level', 'is_active']) {
-    if (data[key] !== undefined) {
-      columns.push(`${key} = ?`);
-      values.push(data[key]);
-    }
-  }
-  if (columns.length === 0) return;
-  await executor.query(`UPDATE organizations SET ${columns.join(', ')} WHERE id = ?`, [...values, id]);
+  const patch = pickUpdateColumns(data, ['code', 'name', 'parent_id', 'level', 'is_active']);
+  if (!patch) return;
+  await executor.query(`UPDATE organizations SET ${patch.setClause} WHERE id = ?`, [
+    ...patch.values,
+    id,
+  ]);
 };
 
 export const deleteOrganization = async (id: number, executor: Executor = getMySql()): Promise<void> => {
@@ -53,16 +49,12 @@ export const updatePosition = async (
   data: { name?: string; grade?: string | null; is_active?: number },
   executor: Executor = getMySql(),
 ): Promise<void> => {
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  for (const key of ['name', 'grade', 'is_active'] as const) {
-    if (data[key] !== undefined) {
-      columns.push(`${key} = ?`);
-      values.push(data[key]);
-    }
-  }
-  if (columns.length === 0) return;
-  await executor.query(`UPDATE positions SET ${columns.join(', ')} WHERE id = ?`, [...values, id]);
+  const patch = pickUpdateColumns(data, ['name', 'grade', 'is_active']);
+  if (!patch) return;
+  await executor.query(`UPDATE positions SET ${patch.setClause} WHERE id = ?`, [
+    ...patch.values,
+    id,
+  ]);
 };
 
 export const deletePosition = async (id: number, executor: Executor = getMySql()): Promise<void> => {

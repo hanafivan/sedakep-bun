@@ -26,11 +26,30 @@ export function Alibi() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   const page = Number(params.get('page') ?? 1);
   const search = params.get('search') ?? '';
   const status = params.get('status') ?? '';
   const year = params.get('year') ?? '';
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const startDate = year ? `${year}-01-01` : undefined;
+      const endDate = year ? `${year}-12-31` : undefined;
+      await api.downloadAlibiExport({
+        start_date: startDate,
+        end_date: endDate,
+        status: status || undefined,
+        search: search || undefined,
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Gagal mengekspor data alibi');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,6 +106,15 @@ export function Alibi() {
           defaultValue={year}
           onBlur={(event) => update('year', event.target.value)}
         />
+        <button
+          type="button"
+          className="button secondary"
+          onClick={handleExport}
+          disabled={exporting}
+          title="Ekspor daftar alibi ke CSV/Excel"
+        >
+          {exporting ? 'Mengekspor...' : 'Ekspor Excel/CSV'}
+        </button>
         <Link className="button" to="/alibi/new">
           Ajukan alibi
         </Link>

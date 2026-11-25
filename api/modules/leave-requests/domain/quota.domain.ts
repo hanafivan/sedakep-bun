@@ -1,5 +1,7 @@
 import { withMysqlTransaction } from '../../../db/mysql';
 import { badRequest } from '../../../shared/errors';
+import { toDateOnly } from '../../../shared/helpers';
+export { toDateOnly };
 import {
   ANNUAL_LEAVE,
   computeQuota,
@@ -28,24 +30,6 @@ import type { LeaveQuotaRow, LeaveTransactionRow } from '../schema/types';
  * Service kuota — orkestrasi + aturan. Tidak ada SQL di file ini.
  * Engine tetap pure; service hanya menyiapkan input dan menyimpan hasil.
  */
-
-/**
- * Kolom DATE harus jadi 'YYYY-MM-DD'.
- *
- * Driver bisa mengembalikan string, Date, atau null — normalisasi di sini
- * supaya engine tidak pernah menerima tanggal yang tidak terbaca. Tanggal
- * yang tidak valid menghasilkan tahun NaN dan transaksi itu lolos dari
- * perhitungan kuota tanpa error; itu kegagalan senyap yang harus dicegah.
- */
-export const toDateOnly = (value: unknown): string => {
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  const text = String(value ?? '');
-  const match = text.match(/^\d{4}-\d{2}-\d{2}/);
-  if (match) return match[0];
-  const parsed = new Date(text);
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  return '';
-};
 
 const toTransactions = (rows: LeaveTransactionRow[]): LeaveTransaction[] =>
   rows.map((row) => ({

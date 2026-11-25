@@ -1,5 +1,5 @@
-import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import { rows, type Executor } from '../../../shared/db';
 import type {
   LeaveClosurePeriodRow,
   LeaveLetterRow,
@@ -14,12 +14,7 @@ import type {
  * Tidak ada logika bisnis di file ini.
  */
 
-type Executor = Pool | PoolConnection;
-
-const rows = async <T>(executor: Executor, sql: string, params: unknown[] = []): Promise<T[]> => {
-  const [result] = await executor.query<RowDataPacket[]>(sql, params);
-  return result as unknown as T[];
-};
+export { findInstanceProfile, findUserNipById, findUserProfileById } from '../../../shared/db';
 
 export const findLeaveRequests = async (
   filter: {
@@ -514,50 +509,7 @@ export const findPppkTmtByNip = async (
   return result[0]?.tmt_date ?? null;
 };
 
-export const findUserNipById = async (
-  userId: number,
-  executor: Executor = getMySql(),
-): Promise<string | null> => {
-  const result = await rows<{ nip: string | null }>(
-    executor,
-    'SELECT nip FROM users WHERE id = ? LIMIT 1',
-    [userId],
-  );
-  return result[0]?.nip ?? null;
-};
-
-export const findUserProfileById = async (
-  userId: number,
-  executor: Executor = getMySql(),
-): Promise<{
-  id: number;
-  name: string;
-  nip: string | null;
-  grade: string | null;
-  unit_name: string | null;
-  position_name: string | null;
-  organization_name: string | null;
-} | null> => {
-  const result = await rows<{
-    id: number;
-    name: string;
-    nip: string | null;
-    grade: string | null;
-    unit_name: string | null;
-    position_name: string | null;
-    organization_name: string | null;
-  }>(
-    executor,
-    `SELECT u.id, u.name, u.nip, u.grade, u.unit_name,
-            p.name AS position_name, o.name AS organization_name
-       FROM users u
-       LEFT JOIN positions p ON p.id = u.position_id
-       LEFT JOIN organizations o ON o.id = u.organization_id
-      WHERE u.id = ? LIMIT 1`,
-    [userId],
-  );
-  return result[0] ?? null;
-};
+/** NIP & profil pegawai — re-exported dari shared/db. */
 
 export const getAllActiveUserIds = async (
   executor: Executor = getMySql(),
@@ -997,6 +949,39 @@ export const countLeaveRequestsByYear = async (
       ORDER BY year DESC`,
   );
 
+/** Matriks crosstab cuti per pegawai per tahun — cerminan legacy `admin.php:270-390`. */
+export const findLeaveCrosstabMatrixByYear = async (
+  year: number,
+  executor: Executor = getMySql(),
+): Promise<Array<{
+  name: string;
+  nip: string | null;
+  ct_hari: number;
+  cb_hari: number;
+  cb_bulan: number;
+  cs_hari: number;
+  cs_bulan: number;
+  cm_bulan: number;
+  cp_hari: number;
+}>> =>
+  rows(
+    executor,
+    `SELECT name, nip,
+      CAST(SUM(IF(leave_type='Cuti Tahunan' AND duration_unit='day', duration, 0)) AS SIGNED) AS ct_hari,
+      CAST(SUM(IF(leave_type='Cuti Besar' AND duration_unit='day', duration, 0)) AS SIGNED) AS cb_hari,
+      CAST(SUM(IF(leave_type='Cuti Besar' AND duration_unit='month', duration, 0)) AS SIGNED) AS cb_bulan,
+      CAST(SUM(IF(leave_type='Cuti Sakit' AND duration_unit='day', duration, 0)) AS SIGNED) AS cs_hari,
+      CAST(SUM(IF(leave_type='Cuti Sakit' AND duration_unit='month', duration, 0)) AS SIGNED) AS cs_bulan,
+      CAST(SUM(IF(leave_type='Cuti Melahirkan' AND duration_unit='month', duration, 0)) AS SIGNED) AS cm_bulan,
+      CAST(SUM(IF(leave_type='Cuti Alasan Penting' AND duration_unit='day', duration, 0)) AS SIGNED) AS cp_hari
+    FROM leave_requests
+    WHERE YEAR(start_date) = ? AND status = 'approved'
+    GROUP BY name, nip
+    HAVING (ct_hari > 0 OR cb_hari > 0 OR cb_bulan > 0 OR cs_hari > 0 OR cs_bulan > 0 OR cm_bulan > 0 OR cp_hari > 0)
+    ORDER BY name ASC`,
+    [year],
+  );
+
 /** Riwayat cuti pra-2020 milik semua pegawai untuk buku cuti satu tahun. */
 export const findLeaveLegacyHistoryByYear = async (
   year: number,
@@ -1117,20 +1102,7 @@ export const findEligibilityOverride = async (
   return { active: true, reason: result[0].description ?? null };
 };
 
-/** Pengaturan instansi (kop surat, nama kantor) yang tersimpan sebagai settings. */
-export const findInstanceProfile = async (
-  executor: Executor = getMySql(),
-): Promise<Record<string, string | null>> => {
-  const result = await rows<{ key: string; value: string | null }>(
-    executor,
-    "SELECT `key`, value FROM settings WHERE `key` LIKE 'instance.%'",
-  );
-  const profile: Record<string, string | null> = {};
-  for (const row of result) {
-    profile[row.key.replace(/^instance\./, '')] = row.value;
-  }
-  return profile;
-};
+/** Pengaturan instansi — re-exported dari shared/db. */
 
 export type ApproverSuggestionRow = {
   id: number;

@@ -1,11 +1,9 @@
-import type { AuthUser } from '../../middleware/bearerAuth';
+import { csvFilename } from '../../shared/csv';
+import { actor, yearNow } from '../../shared/helpers';
 import { successBody } from '../../shared/response';
 import type { AppRouteHandler } from '../../shared/types';
 import * as domain from './domain';
 import * as routes from './leave-admin.routes';
-
-const actor = (c: { get: (key: 'user') => AuthUser }): AuthUser => c.get('user');
-const yearNow = () => new Date().getFullYear();
 
 export const instanceProfile: AppRouteHandler<routes.InstanceProfileRoute> = async (c) => {
   const profile = await domain.getInstanceProfile();
@@ -42,12 +40,6 @@ export const deleteClosurePeriod: AppRouteHandler<routes.DeleteClosurePeriodRout
   return c.json(successBody(null, 'Periode tutup cuti dihapus'), 200);
 };
 
-export const quotaBook: AppRouteHandler<routes.QuotaBookRoute> = async (c) => {
-  const query = c.req.valid('query');
-  const book = await domain.getQuotaBook(query.year ?? yearNow(), query);
-  return c.json(successBody(book, 'Buku cuti'), 200);
-};
-
 export const userDirectory: AppRouteHandler<routes.UserDirectoryRoute> = async (c) => {
   const query = c.req.valid('query');
   const directory = await domain.listUsers(query);
@@ -76,6 +68,13 @@ export const leaveYearlySummary: AppRouteHandler<routes.LeaveYearlySummaryRoute>
   return c.json(successBody(summary, 'Rekap permohonan per tahun'), 200);
 };
 
+export const leaveCrosstab: AppRouteHandler<routes.LeaveCrosstabRoute> = async (c) => {
+  const query = c.req.valid('query');
+  const year = query.year ?? yearNow();
+  const matrix = await domain.getLeaveCrosstabMatrix(year);
+  return c.json(successBody(matrix, 'Matriks rekap cuti'), 200);
+};
+
 export const leaveExport: AppRouteHandler<routes.LeaveExportRoute> = async (c) => {
   const query = c.req.valid('query');
   const statuses: string[] | undefined = query.status
@@ -91,10 +90,9 @@ export const leaveExport: AppRouteHandler<routes.LeaveExportRoute> = async (c) =
     search: query.search,
   });
 
-  const stamp = new Date().toISOString().slice(0, 10);
   return c.body(csv, 200, {
     'Content-Type': 'text/csv; charset=utf-8',
-    'Content-Disposition': `attachment; filename=permohonan_cuti_${stamp}.csv`,
+    'Content-Disposition': `attachment; filename=${csvFilename('permohonan_cuti')}`,
   });
 };
 

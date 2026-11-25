@@ -25,11 +25,11 @@ export const leaveAdminRoutes = app
   .openapi(routes.createClosurePeriod, handlers.createClosurePeriod)
   .openapi(routes.updateClosurePeriod, handlers.updateClosurePeriod)
   .openapi(routes.deleteClosurePeriod, handlers.deleteClosurePeriod)
-  .openapi(routes.quotaBook, handlers.quotaBook)
   .openapi(routes.userDirectory, handlers.userDirectory)
   .openapi(routes.quotaAuditTrail, handlers.quotaAuditTrail)
   .openapi(routes.pppkTmt, handlers.pppkTmt)
   .openapi(routes.pppkTmtWrite, handlers.pppkTmtWrite)
   .openapi(routes.leaveYearlySummary, handlers.leaveYearlySummary)
+  .openapi(routes.leaveCrosstab, handlers.leaveCrosstab)
   .openapi(routes.leaveExport, handlers.leaveExport);
 

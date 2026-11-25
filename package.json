@@ -23,7 +23,6 @@
     "quota:reconcile": "bun run scripts/quota-reconcile.ts",
     "scheduler": "bun run scripts/scheduler.ts",
     "report:go-live": "bun run scripts/go-live-report.ts",
-    "backup": "bun run scripts/backup.ts",
     "migrate:documents": "bun run scripts/migrate-documents.ts"
   },
   "dependencies": {

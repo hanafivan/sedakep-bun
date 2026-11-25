@@ -109,3 +109,19 @@ export const AssignmentNoteUpdateResponseSchema = z.record(z.any()).openapi('Ass
 export const AssignmentCopyCreateResponseSchema = z.record(z.any()).openapi('AssignmentCopyCreateResponse');
 export const AssignmentCopyUpdateResponseSchema = z.record(z.any()).openapi('AssignmentCopyUpdateResponse');
 
+export const AssignmentEmployeeQuerySchema = z.object({
+  search: z.string().optional(),
+});
+
+export const AssignmentEmployeeSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  nip: z.string().nullable(),
+  grade: z.string().nullable(),
+  position: z.string(),
+  organization_name: z.string(),
+}).openapi('AssignmentEmployee');
+
+export const AssignmentEmployeeListResponseSchema = z.array(AssignmentEmployeeSchema).openapi('AssignmentEmployeeListResponse');
+
+

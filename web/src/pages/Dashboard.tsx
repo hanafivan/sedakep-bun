@@ -58,6 +58,12 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   const nowYear = new Date().getFullYear();
+  const [crosstabYear, setCrosstabYear] = useState(nowYear);
+  const [yearlySummaries, setYearlySummaries] = useState<api.LeaveYearlySummary[]>([]);
+  const [crosstabRows, setCrosstabRows] = useState<api.LeaveCrosstabRow[]>([]);
+  const [crosstabSearch, setCrosstabSearch] = useState('');
+  const [loadingCrosstab, setLoadingCrosstab] = useState(false);
+
   const greeting = getIndonesianGreeting();
   const todayFormatted = getIndonesianFormattedDate();
   const firstName = user?.name ? user.name.trim().split(/\s+/)[0] : 'Pegawai';
@@ -109,12 +115,60 @@ export function Dashboard() {
     };
   }, [isStaff]);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const summaries = await api.getLeaveYearlySummary();
+        if (!alive) return;
+        setYearlySummaries(summaries);
+        if (summaries.length > 0 && !summaries.some((s) => s.year === crosstabYear)) {
+          setCrosstabYear(summaries[0].year);
+        }
+      } catch {
+        // Abaikan error background
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let alive = true;
+    setLoadingCrosstab(true);
+    void (async () => {
+      try {
+        const rows = await api.getLeaveCrosstab(crosstabYear);
+        if (!alive) return;
+        setCrosstabRows(rows);
+      } catch {
+        if (alive) setCrosstabRows([]);
+      } finally {
+        if (alive) setLoadingCrosstab(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [isAdmin, crosstabYear]);
+
   // Perhitungan rasio progress bar kuota tahun ini
   const officialN = quota?.official.n ?? 12;
   const availableN = quota?.available.n ?? 0;
   const progressPercent = Math.min(
     100,
     Math.max(0, officialN > 0 ? Math.round((availableN / officialN) * 100) : 0)
+  );
+
+  const selectedYearSummary = yearlySummaries.find((s) => s.year === crosstabYear);
+  const filteredCrosstab = crosstabRows.filter(
+    (r) =>
+      !crosstabSearch ||
+      r.name.toLowerCase().includes(crosstabSearch.toLowerCase()) ||
+      (r.nip && r.nip.includes(crosstabSearch)),
   );
 
   return (
@@ -326,6 +380,120 @@ export function Dashboard() {
           </Link>
         </div>
       </section>
+
+      {/* 3b. Matriks Rekapitulasi Cuti Tahunan Pegawai (Legacy admin.php:270-390) */}
+      {isAdmin ? (
+        <section className="dashboard-block" aria-labelledby="crosstab-heading" style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div>
+              <h2 id="crosstab-heading" className="block-heading" style={{ margin: 0 }}>
+                Matriks Rekapitulasi Cuti Pegawai (Tahun {crosstabYear})
+              </h2>
+              <p className="greeting-subtitle" style={{ margin: '0.25rem 0 0' }}>
+                Akumulasi durasi per jenis cuti yang disetujui (cerminan legacy admin.php)
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="Cari nama/NIP..."
+                value={crosstabSearch}
+                onChange={(e) => setCrosstabSearch(e.target.value)}
+                style={{ padding: '0.4rem 0.6rem', fontSize: '0.875rem', borderRadius: '6px', border: '1px solid var(--border, #ccc)' }}
+              />
+              <select
+                value={crosstabYear}
+                onChange={(e) => setCrosstabYear(Number(e.target.value))}
+                style={{ padding: '0.4rem 0.6rem', fontSize: '0.875rem', borderRadius: '6px', border: '1px solid var(--border, #ccc)' }}
+              >
+                {yearlySummaries.map((s) => (
+                  <option key={s.year} value={s.year}>
+                    Tahun {s.year}
+                  </option>
+                ))}
+                {!yearlySummaries.some((s) => s.year === nowYear) && (
+                  <option value={nowYear}>Tahun {nowYear}</option>
+                )}
+              </select>
+            </div>
+          </div>
+
+          {selectedYearSummary ? (
+            <div
+              style={{
+                background: '#e8f4fd',
+                color: '#0b4d75',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                marginBottom: '1rem',
+                border: '1px solid #c2e0f9',
+              }}
+            >
+              Data Pengajuan Cuti Tahun <strong>{crosstabYear}</strong>: Total Pengajuan{' '}
+              <strong>{selectedYearSummary.total}</strong>, Diterima{' '}
+              <strong>{selectedYearSummary.approved}</strong>, Ditolak{' '}
+              <strong>{selectedYearSummary.rejected}</strong>, Dibatalkan{' '}
+              <strong>{selectedYearSummary.cancelled}</strong>.
+            </div>
+          ) : null}
+
+          <div className="history-table-container" style={{ maxHeight: '420px', overflowY: 'auto' }}>
+            <table className="compact-history-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '40px' }}>No.</th>
+                  <th>Nama Pegawai</th>
+                  <th style={{ textAlign: 'center' }}>Cuti Tahunan (Hari)</th>
+                  <th style={{ textAlign: 'center' }}>Cuti Besar (Hari)</th>
+                  <th style={{ textAlign: 'center' }}>Cuti Besar (Bulan)</th>
+                  <th style={{ textAlign: 'center' }}>Cuti Sakit (Hari)</th>
+                  <th style={{ textAlign: 'center' }}>Cuti Sakit (Bulan)</th>
+                  <th style={{ textAlign: 'center' }}>Cuti Melahirkan (Bulan)</th>
+                  <th style={{ textAlign: 'center' }}>Cuti Alasan Penting (Hari)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingCrosstab ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: '1.5rem', color: '#666' }}>
+                      Memuat data matriks cuti...
+                    </td>
+                  </tr>
+                ) : filteredCrosstab.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: '1.5rem', color: '#666' }}>
+                      Tidak ada data cuti yang disetujui pada tahun {crosstabYear}.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredCrosstab.slice(0, 100).map((row, idx) => (
+                    <tr key={`${row.name}-${idx}`}>
+                      <td>{idx + 1}</td>
+                      <td>
+                        <strong>{row.name}</strong>
+                        {row.nip ? <div style={{ fontSize: '0.75rem', color: '#666' }}>NIP. {row.nip}</div> : null}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>{row.ct_hari || 0}</td>
+                      <td style={{ textAlign: 'center' }}>{row.cb_hari || 0}</td>
+                      <td style={{ textAlign: 'center' }}>{row.cb_bulan || 0}</td>
+                      <td style={{ textAlign: 'center' }}>{row.cs_hari || 0}</td>
+                      <td style={{ textAlign: 'center' }}>{row.cs_bulan || 0}</td>
+                      <td style={{ textAlign: 'center' }}>{row.cm_bulan || 0}</td>
+                      <td style={{ textAlign: 'center' }}>{row.cp_hari || 0}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {filteredCrosstab.length > 100 ? (
+            <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem', textAlign: 'right' }}>
+              Menampilkan 100 dari {filteredCrosstab.length} pegawai. Gunakan filter pencarian untuk mempersempit.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* 4. Baris Bawah: Permohonan Terakhir + Kartu Bantuan */}
       <section className="dashboard-block bottom-row-layout">

@@ -1,5 +1,6 @@
-import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import type { Executor } from '../../../shared/db';
+import { rows } from '../../../shared/db';
 import type {
   AssignmentCopyRow,
   AssignmentLetterRow,
@@ -12,18 +13,14 @@ import type {
  * Tidak ada logika bisnis di file ini.
  */
 
-type Executor = Pool | PoolConnection;
-
-const rows = async <T>(executor: Executor, sql: string, params: unknown[] = []): Promise<T[]> => {
-  const [result] = await executor.query<RowDataPacket[]>(sql, params);
-  return result as unknown as T[];
-};
+export { findInstanceProfile, findUserIdentityById } from '../../../shared/db';
 
 export type AssignmentLetterListRow = AssignmentLetterRow & { name: string; nip: string | null };
 
 export const findAssignmentLetters = async (
   filter: {
     userId?: number;
+    userNip?: string;
     status?: string;
     year?: number;
     search?: string;
@@ -35,7 +32,10 @@ export const findAssignmentLetters = async (
   const where: string[] = [];
   const params: unknown[] = [];
 
-  if (filter.userId) {
+  if (filter.userId && filter.userNip) {
+    where.push('(l.user_id = ? OR EXISTS (SELECT 1 FROM assignment_members m WHERE m.letter_id = l.id AND m.nip = ?))');
+    params.push(filter.userId, filter.userNip);
+  } else if (filter.userId) {
     where.push('l.user_id = ?');
     params.push(filter.userId);
   }
@@ -72,13 +72,16 @@ export const findAssignmentLetters = async (
 };
 
 export const countAssignmentLetters = async (
-  filter: { userId?: number; status?: string; year?: number; search?: string },
+  filter: { userId?: number; userNip?: string; status?: string; year?: number; search?: string },
   executor: Executor = getMySql(),
 ): Promise<number> => {
   const where: string[] = [];
   const params: unknown[] = [];
 
-  if (filter.userId) {
+  if (filter.userId && filter.userNip) {
+    where.push('(l.user_id = ? OR EXISTS (SELECT 1 FROM assignment_members m WHERE m.letter_id = l.id AND m.nip = ?))');
+    params.push(filter.userId, filter.userNip);
+  } else if (filter.userId) {
     where.push('l.user_id = ?');
     params.push(filter.userId);
   }
@@ -187,29 +190,46 @@ export const findAssignmentCopyById = async (
   return result[0] ?? null;
 };
 
-export const findUserIdentityById = async (
-  userId: number,
-  executor: Executor = getMySql(),
-): Promise<{ id: number; name: string; nip: string | null } | null> => {
-  const result = await rows<{ id: number; name: string; nip: string | null }>(
-    executor,
-    'SELECT id, name, nip FROM users WHERE id = ? LIMIT 1',
-    [userId],
-  );
-  return result[0] ?? null;
+/** Identitas user & instansi (kop surat) — re-exported dari shared/db. */
+
+export type AvailableEmployeeRow = {
+  id: number;
+  name: string;
+  nip: string | null;
+  grade: string | null;
+  position: string;
+  organization_name: string;
 };
 
-/** Identitas instansi (kop surat) tersimpan sebagai settings `instance.*`. */
-export const findInstanceProfile = async (
+export const searchAvailableEmployees = async (
+  search?: string,
+  limit = 20,
   executor: Executor = getMySql(),
-): Promise<Record<string, string | null>> => {
-  const result = await rows<{ key: string; value: string | null }>(
-    executor,
-    "SELECT `key`, value FROM settings WHERE `key` LIKE 'instance.%'",
-  );
-  const profile: Record<string, string | null> = {};
-  for (const row of result) {
-    profile[row.key.replace(/^instance\./, '')] = row.value;
+): Promise<AvailableEmployeeRow[]> => {
+  const where: string[] = ['u.is_active = 1'];
+  const params: unknown[] = [];
+  if (search && search.trim()) {
+    where.push('(u.name LIKE ? OR u.nip LIKE ?)');
+    const like = `%${search.trim()}%`;
+    params.push(like, like);
   }
-  return profile;
+  params.push(Math.min(Math.max(limit, 1), 50));
+  return rows<AvailableEmployeeRow>(
+    executor,
+    `SELECT 
+       u.id, 
+       u.name, 
+       u.nip, 
+       u.grade, 
+       COALESCE(p.name, '') AS position, 
+       COALESCE(o.name, u.unit_name, '') AS organization_name
+     FROM users u
+     LEFT JOIN positions p ON p.id = u.position_id
+     LEFT JOIN organizations o ON o.id = u.organization_id
+     WHERE ${where.join(' AND ')}
+     ORDER BY u.name ASC
+     LIMIT ?`,
+    params,
+  );
 };
+

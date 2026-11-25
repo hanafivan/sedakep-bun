@@ -1,5 +1,6 @@
-import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import type { Executor } from '../../../shared/db';
+import { rows } from '../../../shared/db';
 import type {
   DispositionFinalRow,
   DispositionRow,
@@ -13,12 +14,7 @@ import type {
  * Tidak ada logika bisnis di file ini.
  */
 
-type Executor = Pool | PoolConnection;
-
-const rows = async <T>(executor: Executor, sql: string, params: unknown[] = []): Promise<T[]> => {
-  const [result] = await executor.query<RowDataPacket[]>(sql, params);
-  return result as unknown as T[];
-};
+export { findInstanceProfile } from '../../../shared/db';
 
 export type IncomingLetterListRow = IncomingLetterRow & { disposition_count: number };
 
@@ -212,17 +208,5 @@ export const findClassificationByCode = async (
   return result[0] ?? null;
 };
 
-/** Identitas instansi (kop cetak disposisi) tersimpan sebagai settings `instance.*`. */
-export const findInstanceProfile = async (
-  executor: Executor = getMySql(),
-): Promise<Record<string, string | null>> => {
-  const result = await rows<{ key: string; value: string | null }>(
-    executor,
-    "SELECT `key`, value FROM settings WHERE `key` LIKE 'instance.%'",
-  );
-  const profile: Record<string, string | null> = {};
-  for (const row of result) {
-    profile[row.key.replace(/^instance\./, '')] = row.value;
-  }
-  return profile;
-};
+/** Identitas instansi (kop cetak disposisi) — re-exported dari shared/db. */
+

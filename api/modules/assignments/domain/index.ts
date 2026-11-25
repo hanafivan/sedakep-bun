@@ -2,6 +2,14 @@ import type { AuthUser } from '../../../middleware/bearerAuth';
 import { badRequest, forbidden, notFound } from '../../../shared/errors';
 import { makeVerifyCode } from '../../../shared/verify';
 import {
+  canEditByOwnerOrAdmin,
+  formatDateId,
+  normalizePagination,
+  nowStamp,
+  paginatedResult,
+  today,
+} from '../../../shared/helpers';
+import {
   deleteAssignmentCopy,
   deleteAssignmentLetter,
   deleteAssignmentMember,
@@ -32,6 +40,7 @@ import {
   findAssignmentNoteById,
   findInstanceProfile,
   findUserIdentityById,
+  searchAvailableEmployees,
 } from '../query';
 import type { AssignmentLetterRow } from '../schema/types';
 
@@ -65,21 +74,6 @@ export type AssignmentLetterInput = Partial<{
 }>;
 
 type LetterWithOwner = AssignmentLetterRow & { name?: string; nip?: string | null };
-
-const nowStamp = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
-const today = () => new Date().toISOString().slice(0, 10);
-
-const MONTHS_ID = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-];
-const formatDateId = (value: string | null | undefined): string => {
-  if (!value) return '';
-  const iso = String(value).slice(0, 10).split('-');
-  if (iso.length !== 3) return String(value);
-  const [y, m, d] = iso;
-  return `${Number(d)} ${MONTHS_ID[Number(m) - 1] ?? m} ${y}`;
-};
 
 /** `B-{no_surat}/Kk.12.04/{kode}/{MM}/{YYYY}` — persis pola legacy. */
 const formatNumberDisplay = (row: LetterWithOwner): string | null => {
@@ -121,11 +115,23 @@ const toPublic = (row: LetterWithOwner) => ({
   updated_at: String(row.updated_at),
 });
 
-export const canViewLetter = (actor: AuthUser, letter: { user_id: number }): boolean =>
-  actor.role !== 'pegawai' || Number(actor.id) === Number(letter.user_id);
+export const canViewLetter = (
+  actor: AuthUser,
+  letter: { user_id: number },
+  members?: Array<{ nip?: string | null }>,
+  actorNip?: string | null,
+): boolean => {
+  if (actor.role !== 'pegawai') return true;
+  if (Number(actor.id) === Number(letter.user_id)) return true;
+  if (actorNip && members?.some((m) => m.nip && m.nip === actorNip)) return true;
+  return false;
+};
 
-export const canEditLetter = (actor: AuthUser, letter: { user_id: number }): boolean =>
-  actor.role === 'admin' || Number(actor.id) === Number(letter.user_id);
+export const canEditLetter = canEditByOwnerOrAdmin;
+
+export const getUserIdentity = (userId: number) => findUserIdentityById(userId);
+
+export const searchEmployees = (search?: string) => searchAvailableEmployees(search);
 
 const assertCanEdit = (actor: AuthUser, letter: { user_id: number }) => {
   if (!canEditLetter(actor, letter)) throw forbidden('Tidak berhak mengubah surat tugas ini');
@@ -148,6 +154,7 @@ const requireEditableLetter = async (
 export const listAssignmentLetters = async (
   filter: {
     userId?: number;
+    userNip?: string;
     status?: string;
     year?: number;
     search?: string;
@@ -155,19 +162,12 @@ export const listAssignmentLetters = async (
     perPage?: number;
   },
 ) => {
-  const perPage = Math.min(Math.max(filter.perPage ?? 25, 1), 200);
-  const page = Math.max(filter.page ?? 1, 1);
+  const { page, perPage, limit, offset } = normalizePagination(filter.page, filter.perPage);
   const [items, total] = await Promise.all([
-    findAssignmentLetters({ ...filter, limit: perPage, offset: (page - 1) * perPage }),
+    findAssignmentLetters({ ...filter, limit, offset }),
     countAssignmentLetters(filter),
   ]);
-  return {
-    items: items.map(toPublic),
-    total,
-    page,
-    per_page: perPage,
-    total_pages: Math.ceil(total / perPage),
-  };
+  return paginatedResult(items.map(toPublic), total, page, perPage);
 };
 
 export const getAssignmentLetterDetail = async (id: number) => {
@@ -228,41 +228,17 @@ export const generateAssignmentPdf = async (id: number, actor: AuthUser) => {
   }
   if (!detail.letter_number) throw badRequest('Isi nomor surat sebelum mencetak PDF');
 
-  const { buildLetterPdf } = await import('../../../shared/pdf');
+  const { buildAssignmentLetterPdf } = await import('../../../shared/pdf');
   const { verifyUrl } = await import('../../../shared/verify');
   const link = verifyUrl('assignment_letters', id);
 
-  const pdf = await buildLetterPdf({
-    kop: [
-      detail.instance?.name ?? 'KEMENTERIAN AGAMA',
-      detail.instance?.address ?? '',
-      detail.instance?.website ?? '',
-    ].filter((value) => Boolean(value)),
-    title: 'SURAT TUGAS',
-    subtitle: `NOMOR: ${detail.number_display ?? '-'}`,
-    paragraphs: [
-      detail.consideration ? `Pertimbangan: ${detail.consideration}` : '',
-      detail.legal_basis ? `Dasar: ${detail.legal_basis}` : '',
-      'MEMUTUSKAN',
-      detail.content ?? '',
-    ].filter((value) => Boolean(value)),
-    table: {
-      headers: ['No', 'Nama', 'NIP', 'Jabatan'],
-      rows: detail.members.map((member, index) => [
-        String(index + 1),
-        member.name + (member.grade ? ` (${member.grade})` : ''),
-        member.nip ?? '-',
-        member.position ?? '-',
-      ]),
-    },
-    closing: detail.notes.length > 0 ? ['Keterangan:', ...detail.notes.map((n) => `- ${n.note}`)] : [],
-    signer: {
-      city: detail.place ?? '',
-      date: formatDateId(detail.printed_at ?? detail.created_at),
-      position: detail.signer_position ?? '',
-      name: detail.signer_name ?? '',
-    },
-    qr: { text: link },
+  const pdf = await buildAssignmentLetterPdf({
+    ...detail,
+    instance_name: detail.instance?.name,
+    instance_address: detail.instance?.address,
+    instance_website: detail.instance?.website,
+    verify_url: link,
+    is_draft: detail.decision !== 'accepted' || !detail.letter_number,
   });
 
   const { uploadDocument, getDownloadUrl } = await import('../../documents/domain');

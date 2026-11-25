@@ -1,4 +1,5 @@
 import { getMySql, type MysqlRow } from '../../../db/mysql';
+import { rows as queryRows } from '../../../shared/db';
 import type { UserRow } from '../schema/types';
 
 /**
@@ -6,10 +7,8 @@ import type { UserRow } from '../schema/types';
  * Tidak ada logika bisnis di file ini.
  */
 
-const rows = async (sql: string, params: unknown[] = []): Promise<UserRow[]> => {
-  const [result] = await getMySql().query<MysqlRow[]>(sql, params);
-  return result as unknown as UserRow[];
-};
+const rows = (sql: string, params: unknown[] = []): Promise<UserRow[]> =>
+  queryRows<UserRow>(getMySql(), sql, params);
 
 const one = async (sql: string, params: unknown[] = []): Promise<UserRow | null> => {
   const result = await rows(sql, params);

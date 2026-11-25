@@ -1,4 +1,5 @@
 import { badRequest, forbidden, notFound } from '../../../shared/errors';
+import { deriveThreeLevelStatus, nowStamp, yearOf } from '../../../shared/helpers';
 import { insertAuditLog, updateLeaveDecision } from '../command';
 import { findLeaveRequestById } from '../query';
 import { rebuildQuota } from './quota.domain';
@@ -15,8 +16,6 @@ import type { LeaveRequestRow } from '../schema/types';
  *
  * Tidak ada SQL di file ini; mutasi lewat command dan pembacaan lewat query.
  */
-
-const yearOf = (value: string | Date): number => Number(String(value).slice(0, 4));
 
 export type DecisionInput = {
   actorId: number;
@@ -73,29 +72,7 @@ export const assertApproverAssignment = (
   }
 };
 
-/** Status akhir diturunkan dari kombinasi keputusan; bukan mutasi kuota manual. */
-const deriveStatus = (
-  adminDecision: string,
-  approver1: string,
-  approver2: string,
-): LeaveRequestRow['status'] => {
-  if (adminDecision === 'cancelled' || approver1 === 'cancelled' || approver2 === 'cancelled') {
-    return 'cancelled';
-  }
-  if (
-    adminDecision === 'rejected' ||
-    approver1 === 'rejected' ||
-    approver2 === 'rejected'
-  ) {
-    return 'rejected';
-  }
-  if (adminDecision === 'accepted' && approver1 === 'accepted' && approver2 === 'accepted') {
-    return 'approved';
-  }
-  return 'in_review';
-};
-
-const nowStamp = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
+const deriveStatus = deriveThreeLevelStatus;
 
 /** Approval admin (level 1 pada legacy) dengan rebuild projection setelahnya. */
 export const decideAdmin = async (

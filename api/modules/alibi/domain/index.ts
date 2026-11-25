@@ -2,6 +2,16 @@ import type { AuthUser } from '../../../middleware/bearerAuth';
 import { badRequest, forbidden, notFound } from '../../../shared/errors';
 import { makeVerifyCode } from '../../../shared/verify';
 import {
+  canEditByOwnerOrAdmin,
+  canViewByOwnerOrStaff,
+  deriveThreeLevelStatus,
+  normalizePagination,
+  nowStamp,
+  paginatedResult,
+  today,
+} from '../../../shared/helpers';
+import { buildCsv, csvFilename } from '../../../shared/csv';
+import {
   deleteAlibiRequest,
   insertAlibiRequest,
   insertAuditLog,
@@ -13,6 +23,7 @@ import {
   countAlibiRequests,
   findAlibiRequestById,
   findAlibiRequests,
+  findAlibiRequestsForExport,
   findInstanceProfile,
   findUserNipById,
   findUserProfileById,
@@ -43,25 +54,7 @@ export type AlibiInput = Partial<{
   approver_2_position: string;
 }>;
 
-const nowStamp = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
-const today = () => new Date().toISOString().slice(0, 10);
-
-const deriveStatus = (
-  adminDecision: string,
-  approver1: string,
-  approver2: string,
-): AlibiStatus => {
-  if (adminDecision === 'cancelled' || approver1 === 'cancelled' || approver2 === 'cancelled') {
-    return 'cancelled';
-  }
-  if (adminDecision === 'rejected' || approver1 === 'rejected' || approver2 === 'rejected') {
-    return 'rejected';
-  }
-  if (adminDecision === 'accepted' && approver1 === 'accepted' && approver2 === 'accepted') {
-    return 'approved';
-  }
-  return 'in_review';
-};
+const deriveStatus = deriveThreeLevelStatus;
 
 const toPublic = (row: AlibiRequestRow) => ({
   id: row.id,
@@ -96,11 +89,9 @@ const toPublic = (row: AlibiRequestRow) => ({
   updated_at: String(row.updated_at),
 });
 
-export const canViewAlibi = (actor: AuthUser, alibi: { user_id: number }): boolean =>
-  actor.role !== 'pegawai' || Number(actor.id) === Number(alibi.user_id);
+export const canViewAlibi = canViewByOwnerOrStaff;
 
-export const canEditAlibi = (actor: AuthUser, alibi: { user_id: number }): boolean =>
-  actor.role === 'admin' || Number(actor.id) === Number(alibi.user_id);
+export const canEditAlibi = canEditByOwnerOrAdmin;
 
 const assertCanEdit = (actor: AuthUser, alibi: { user_id: number }) => {
   if (!canEditAlibi(actor, alibi)) throw forbidden('Tidak berhak mengubah alibi ini');
@@ -124,19 +115,12 @@ export const listAlibiRequests = async (filter: {
   page?: number;
   perPage?: number;
 }) => {
-  const perPage = Math.min(Math.max(filter.perPage ?? 25, 1), 200);
-  const page = Math.max(filter.page ?? 1, 1);
+  const { page, perPage, limit, offset } = normalizePagination(filter.page, filter.perPage);
   const [items, total] = await Promise.all([
-    findAlibiRequests({ ...filter, limit: perPage, offset: (page - 1) * perPage }),
+    findAlibiRequests({ ...filter, limit, offset }),
     countAlibiRequests(filter),
   ]);
-  return {
-    items: items.map(toPublic),
-    total,
-    page,
-    per_page: perPage,
-    total_pages: Math.ceil(total / perPage),
-  };
+  return paginatedResult(items.map(toPublic), total, page, perPage);
 };
 
 export const getAlibiRequestDetail = async (id: number) => {
@@ -352,3 +336,87 @@ export const attachAlibiFile = async (
 };
 
 export const getAlibiPrintData = async (id: number) => getAlibiRequestDetail(id);
+
+export const generateAlibiPdf = async (id: number, actor: AuthUser) => {
+  const detail = await getAlibiRequestDetail(id);
+  const { buildAlibiLetterPdf } = await import('../../../shared/pdf');
+  const { verifyUrl } = await import('../../../shared/verify');
+  const link = verifyUrl('alibi_requests', id);
+
+  const pdf = await buildAlibiLetterPdf({
+    ...detail,
+    instance_address: detail.instance?.address,
+    verify_url: link,
+    is_draft: detail.status !== 'approved',
+  });
+
+  const { uploadDocument, getDownloadUrl } = await import('../../documents/domain');
+  const uploaded = await uploadDocument({
+    buffer: Buffer.from(pdf),
+    filename: `alibi-${detail.name.replace(/\s+/g, '_')}-${id}.pdf`,
+    mimeType: 'application/pdf',
+    entityTable: 'alibi_requests',
+    entityId: id,
+    field: 'pdf',
+    label: 'PDF surat alibi',
+    actorId: Number(actor.id),
+  });
+  await markAlibiPrinted(id, today());
+  const download = await getDownloadUrl(uploaded.id);
+  await insertAuditLog({
+    actor_id: Number(actor.id),
+    action: 'alibi_pdf_generate',
+    entity_table: 'alibi_requests',
+    entity_id: id,
+    after_data: { document_id: uploaded.id },
+  });
+  return { document_id: uploaded.id, url: download.url, verify_url: link };
+};
+
+const CSV_HEADERS = [
+  'No',
+  'Nama',
+  'NIP',
+  'Unit Kerja',
+  'Jabatan',
+  'Jenis Alibi',
+  'Tanggal Alibi',
+  'Waktu Mulai',
+  'Waktu Selesai',
+  'Alasan',
+  'Status',
+  'Acc Admin',
+  'Acc Atasan #1',
+  'Acc Atasan #2',
+];
+
+export const exportAlibiCsv = async (filter: {
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  search?: string;
+  userId?: number;
+}): Promise<string> => {
+  const data = await findAlibiRequestsForExport(filter);
+
+  const rows = data.map((row, index) => [
+    index + 1,
+    row.name,
+    row.nip ? `'${row.nip}` : '-',
+    row.organization_name || '-',
+    row.position || '-',
+    row.alibi_type || '-',
+    row.alibi_date ? String(row.alibi_date).slice(0, 10) : '-',
+    row.time_start || '-',
+    row.time_end || '-',
+    row.reason || '-',
+    row.status,
+    row.admin_decision,
+    row.approver_1_status,
+    row.approver_2_status,
+  ]);
+
+  return buildCsv(CSV_HEADERS, rows);
+};
+
+export { csvFilename } from '../../../shared/csv';

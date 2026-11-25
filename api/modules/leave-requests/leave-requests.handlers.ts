@@ -1,12 +1,12 @@
 import type { AuthUser } from '../../middleware/bearerAuth';
 import { canSeeAll } from '../../middleware/roleGuard';
-import { badRequest, forbidden } from '../../shared/errors';
+import { csvFilename } from '../../shared/csv';
+import { badRequest } from '../../shared/errors';
+import { actor, toUpload } from '../../shared/helpers';
 import { successBody } from '../../shared/response';
 import type { AppRouteHandler } from '../../shared/types';
 import * as domain from './domain';
 import * as routes from './leave-requests.routes';
-
-const actor = (c: { get: (key: 'user') => AuthUser }): AuthUser => c.get('user');
 
 /** `{user_id}` boleh berisi `me` (milik user login) atau id numerik. */
 const resolveUserId = (param: string | number, actorId: number): number => {
@@ -20,14 +20,6 @@ const resolveUserId = (param: string | number, actorId: number): number => {
 const applyScope = (userId: number, user: AuthUser): number => {
   return canSeeAll(user.role) || Number(user.id) === userId ? userId : Number(user.id);
 };
-
-const yearNow = () => new Date().getFullYear();
-
-const toUpload = async (file: File) => ({
-  buffer: Buffer.from(await file.arrayBuffer()),
-  filename: file.name || 'berkas',
-  mimeType: file.type || null,
-});
 
 // ---------------------------------------------------------------------------
 // Permohonan cuti
@@ -58,6 +50,25 @@ export const listLeaveRequests: AppRouteHandler<routes.ListLeaveRequestsRoute> =
     perPage: query.per_page,
   });
   return c.json(successBody(result, 'Daftar permohonan cuti'), 200);
+};
+
+export const exportLeaveRequests: AppRouteHandler<routes.ExportLeaveRequestsRoute> = async (c) => {
+  const query = c.req.valid('query');
+  const user = actor(c);
+  const scopedUserId = canSeeAll(user.role) ? undefined : Number(user.id);
+  const csv = await domain.exportLeaveRequestsCsv({
+    dateFrom: query.dateFrom,
+    dateTo: query.dateTo,
+    leaveType: query.leaveType,
+    statuses: query.status ? [query.status] : undefined,
+    letterStatus: query.letterStatus,
+    search: query.search,
+    userId: scopedUserId,
+  });
+  const filename = csvFilename('cuti_export');
+  c.header('Content-Type', 'text/csv; charset=utf-8');
+  c.header('Content-Disposition', `attachment; filename="${filename}"`);
+  return c.body(csv, 200);
 };
 
 export const approvalSummary: AppRouteHandler<routes.ApprovalSummaryRoute> = async (c) => {

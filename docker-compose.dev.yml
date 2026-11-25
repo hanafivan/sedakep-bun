@@ -1,0 +1,83 @@
+# Docker Compose untuk local development mandiri (lengkap dengan MySQL dan MinIO)
+# Jalankan dengan: docker compose -f docker-compose.dev.yml up -d
+
+services:
+  app:
+    container_name: sedakep-app-dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=sedakep_user
+      - MYSQL_PASSWORD=sedakep_secret
+      - MYSQL_DATABASE=sedakep
+      - STORAGE_DRIVER=minio
+      - STORAGE_ENDPOINT=http://minio:9000
+      - STORAGE_ACCESS_KEY=minioadmin
+      - STORAGE_SECRET_KEY=minioadmin123
+      - STORAGE_BUCKET=sedakep-documents
+      - JWT_SECRET=dev-secret-kemenag-sleman-2026
+      - BASIC_AUTH_USERNAME=admin
+      - BASIC_AUTH_PASSWORD=admin
+      - BASIC_AUTH_SALT=dev-salt-kemenag-sleman-2026
+      - RUN_MIGRATIONS=true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks:
+      - sedakep-net
+
+  mysql:
+    image: mysql:8.4
+    container_name: sedakep-mysql-dev
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=sedakep
+      - MYSQL_USER=sedakep_user
+      - MYSQL_PASSWORD=sedakep_secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - sedakep_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - sedakep-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: sedakep-minio-dev
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - sedakep_minio_data:/data
+    networks:
+      - sedakep-net
+
+volumes:
+  sedakep_mysql_data:
+  sedakep_minio_data:
+
+networks:
+  sedakep-net:
+    driver: bridge

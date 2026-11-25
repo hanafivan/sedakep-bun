@@ -1,12 +1,13 @@
-import type { Pool, PoolConnection } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import { pickUpdateColumns, type Executor } from '../../../shared/db';
 
 /**
  * COMMAND = operasi tulis modul disposisi. Semua INSERT/UPDATE/DELETE ada di
  * sini. Tidak ada logika bisnis di file ini.
  */
 
-export type Executor = Pool | PoolConnection;
+export type { Executor };
+export { insertAuditLog } from '../../../shared/db';
 
 export type NewIncomingLetter = {
   created_by?: number | null;
@@ -68,18 +69,11 @@ export const updateIncomingLetter = async (
   data: Record<string, unknown>,
   executor: Executor = getMySql(),
 ): Promise<void> => {
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  for (const key of LETTER_COLUMNS) {
-    if (data[key] !== undefined) {
-      columns.push(`${key} = ?`);
-      values.push(data[key]);
-    }
-  }
-  if (columns.length === 0) return;
+  const patch = pickUpdateColumns(data, LETTER_COLUMNS);
+  if (!patch) return;
   await executor.query(
-    `UPDATE incoming_letters SET ${columns.join(', ')} WHERE id = ?`,
-    [...values, id],
+    `UPDATE incoming_letters SET ${patch.setClause} WHERE id = ?`,
+    [...patch.values, id],
   );
 };
 
@@ -136,17 +130,10 @@ export const updateDisposition = async (
   executor: Executor = getMySql(),
 ): Promise<void> => {
   const allowed = ['target_name', 'target_nip', 'instruction', 'notes', 'sort_order', 'status', 'decided_at'];
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  for (const key of allowed) {
-    if (data[key] !== undefined) {
-      columns.push(`${key} = ?`);
-      values.push(data[key]);
-    }
-  }
-  if (columns.length === 0) return;
-  await executor.query(`UPDATE dispositions SET ${columns.join(', ')} WHERE id = ?`, [
-    ...values,
+  const patch = pickUpdateColumns(data, allowed);
+  if (!patch) return;
+  await executor.query(`UPDATE dispositions SET ${patch.setClause} WHERE id = ?`, [
+    ...patch.values,
     id,
   ]);
 };
@@ -223,17 +210,10 @@ export const updateClassification = async (
   data: { code?: string; name?: string; description?: string | null; is_active?: number },
   executor: Executor = getMySql(),
 ): Promise<void> => {
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  for (const key of ['code', 'name', 'description', 'is_active'] as const) {
-    if (data[key] !== undefined) {
-      columns.push(`${key} = ?`);
-      values.push(data[key]);
-    }
-  }
-  if (columns.length === 0) return;
-  await executor.query(`UPDATE letter_classifications SET ${columns.join(', ')} WHERE id = ?`, [
-    ...values,
+  const patch = pickUpdateColumns(data, ['code', 'name', 'description', 'is_active']);
+  if (!patch) return;
+  await executor.query(`UPDATE letter_classifications SET ${patch.setClause} WHERE id = ?`, [
+    ...patch.values,
     id,
   ]);
 };
@@ -246,30 +226,6 @@ export const deleteClassification = async (
 };
 
 // ---------------------------------------------------------------------------
-// Audit
+// Audit — re-exported from shared/db
 // ---------------------------------------------------------------------------
 
-export const insertAuditLog = async (
-  data: {
-    actor_id?: number | null;
-    action: string;
-    entity_table: string;
-    entity_id?: number | null;
-    before_data?: unknown;
-    after_data?: unknown;
-  },
-  executor: Executor = getMySql(),
-): Promise<void> => {
-  await executor.execute(
-    `INSERT INTO audit_logs (actor_id, action, entity_table, entity_id, before_data, after_data)
-     VALUES (?,?,?,?,?,?)`,
-    [
-      data.actor_id ?? null,
-      data.action,
-      data.entity_table,
-      data.entity_id ?? null,
-      data.before_data === undefined ? null : JSON.stringify(data.before_data),
-      data.after_data === undefined ? null : JSON.stringify(data.after_data),
-    ],
-  );
-};

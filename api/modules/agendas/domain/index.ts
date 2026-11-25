@@ -1,5 +1,11 @@
 import type { AuthUser } from '../../../middleware/bearerAuth';
 import { forbidden, notFound } from '../../../shared/errors';
+import {
+  canEditByOwnerOrAdmin,
+  canViewByOwnerOrStaff,
+  normalizePagination,
+  paginatedResult,
+} from '../../../shared/helpers';
 import { deleteAgenda, insertAgenda, insertAuditLog, setAgendaReport, updateAgenda } from '../command';
 import {
   countAgendas,
@@ -50,10 +56,10 @@ const toPublic = (row: AgendaRow) => ({
 });
 
 export const canViewAgenda = (actor: AuthUser, agenda: { user_id: number }): boolean =>
-  actor.role !== 'pegawai' || Number(actor.id) === Number(agenda.user_id);
+  canViewByOwnerOrStaff(actor, agenda.user_id);
 
 export const canEditAgenda = (actor: AuthUser, agenda: { user_id: number }): boolean =>
-  actor.role === 'admin' || Number(actor.id) === Number(agenda.user_id);
+  canEditByOwnerOrAdmin(actor, agenda.user_id);
 
 const requireEditable = async (id: number, actor: AuthUser): Promise<AgendaRow> => {
   const agenda = await findAgendaById(id);
@@ -70,19 +76,12 @@ export const listAgendas = async (filter: {
   page?: number;
   perPage?: number;
 }) => {
-  const perPage = Math.min(Math.max(filter.perPage ?? 25, 1), 200);
-  const page = Math.max(filter.page ?? 1, 1);
+  const { page, perPage, offset } = normalizePagination(filter);
   const [items, total] = await Promise.all([
-    findAgendas({ ...filter, limit: perPage, offset: (page - 1) * perPage }),
+    findAgendas({ ...filter, limit: perPage, offset }),
     countAgendas(filter),
   ]);
-  return {
-    items: items.map(toPublic),
-    total,
-    page,
-    per_page: perPage,
-    total_pages: Math.ceil(total / perPage),
-  };
+  return paginatedResult(items.map(toPublic), total, page, perPage);
 };
 
 export const getAgendaDetail = async (id: number) => {

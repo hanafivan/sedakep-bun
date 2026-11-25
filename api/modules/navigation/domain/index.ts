@@ -1,4 +1,5 @@
 import type { AuthUser } from '../../../middleware/bearerAuth';
+import { seesAll, yearNow } from '../../../shared/helpers';
 
 /**
  * Domain navigasi — menghimpun angka badge sidebar dari modul yang sudah ada.
@@ -7,8 +8,6 @@ import type { AuthUser } from '../../../middleware/bearerAuth';
  * hitungan ulang di klien. Modul lain diimpor dinamis agar tidak ada siklus
  * dependensi saat modul-modul ini saling merujuk.
  */
-
-const yearNow = () => new Date().getFullYear();
 
 export const getNavigationBadges = async (user?: AuthUser | null) => {
   let leavePending = 0;
@@ -23,7 +22,7 @@ export const getNavigationBadges = async (user?: AuthUser | null) => {
     };
   }
 
-  const isStaff = user.role === 'admin' || user.role === 'verifikator' || user.role === 'atasan';
+  const isStaff = seesAll(user);
 
   try {
     const leaveRequestsDomain = await import('../../leave-requests/domain');
@@ -58,6 +57,8 @@ export const getNavigationBadges = async (user?: AuthUser | null) => {
     disposition_pending: dispositionPending,
     leave_pending: leavePending,
     quota_remaining_days: quotaRemaining,
+    leave_quota_remaining: quotaRemaining,
+    leave_pending_approval: leavePending,
   };
 };
 

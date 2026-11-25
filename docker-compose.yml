@@ -1,0 +1,22 @@
+services:
+  app:
+    container_name: sedakep-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # Variabel environment diinjeksi dari file .env (ditarik otomatis dari Vault di Jenkins)
+    env_file:
+      - .env
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    networks:
+      - lkh-network
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+
+networks:
+  lkh-network:
+    external: true
+    name: lkh-network

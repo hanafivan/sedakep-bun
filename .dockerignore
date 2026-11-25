@@ -1,0 +1,47 @@
+# Dependencies (will be installed inside container)
+node_modules
+bun.lockb
+
+# Environment files (injected at runtime via Vault / .env)
+.env
+.env.*
+!.env.example
+
+# Development & Git
+.git
+.github
+.editorconfig
+.prettierrc
+.prettierignore
+
+# IDE & Editor configs
+.vscode
+.idea
+.claude
+.gemini
+*.swp
+*.swo
+*~
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Build artifacts & test reports
+web/dist
+coverage
+.nyc_output
+
+# Test files
+tests
+
+# Docker files (not needed inside container)
+docker-compose*.yml
+Dockerfile
+Jenkinsfile
+.dockerignore
+
+# Runtime data & logs
+storage/*
+!storage/.gitkeep
+*.log

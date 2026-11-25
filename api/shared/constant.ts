@@ -45,21 +45,6 @@ export const GET_NAVIGATION_METHOD = {
 };
 
 // ----------------------------------------------------------------------------
-// System / Backup
-// ----------------------------------------------------------------------------
-export const GET_SYSTEM_METHOD = {
-  method: 'get' as const,
-  tags: ['System'],
-  security: bearerSecurity,
-};
-
-export const POST_SYSTEM_METHOD = {
-  method: 'post' as const,
-  tags: ['System'],
-  security: bearerSecurity,
-};
-
-// ----------------------------------------------------------------------------
 // Master Data
 // ----------------------------------------------------------------------------
 export const GET_MASTER_METHOD = {

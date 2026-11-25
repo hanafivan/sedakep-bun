@@ -27,7 +27,6 @@ const post = (path: string, payload: unknown, token?: string) =>
   request(path, { method: 'POST', body: JSON.stringify(payload) }, token);
 
 const ADMIN_PATHS = [
-  '/api/v1/leave/admin/quota-book',
   '/api/v1/leave/admin/users',
   '/api/v1/leave/admin/quota-audit',
   '/api/v1/leave/admin/pppk-tmt',

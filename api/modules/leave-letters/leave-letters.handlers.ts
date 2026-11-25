@@ -1,16 +1,8 @@
-import type { AuthUser } from '../../middleware/bearerAuth';
+import { actor, toUpload } from '../../shared/helpers';
 import { successBody } from '../../shared/response';
 import type { AppRouteHandler } from '../../shared/types';
 import * as domain from './domain';
 import * as routes from './leave-letters.routes';
-
-const actor = (c: { get: (key: 'user') => AuthUser }): AuthUser => c.get('user');
-
-const toUpload = async (file: File) => ({
-  buffer: Buffer.from(await file.arrayBuffer()),
-  filename: file.name || 'berkas',
-  mimeType: file.type || null,
-});
 
 export const lettersList: AppRouteHandler<routes.LettersListRoute> = async (c) => {
   const query = c.req.valid('query');

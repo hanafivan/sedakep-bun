@@ -26,6 +26,7 @@ for (const prefix of ['/leave-requests/*/approve/*', '/leave-requests/*/cancel']
 
 export const leaveRequestsRoutes = app
   .openapi(routes.listLeaveRequests, handlers.listLeaveRequests)
+  .openapi(routes.exportLeaveRequests, handlers.exportLeaveRequests)
   .openapi(routes.approvalSummary, handlers.approvalSummary)
   .openapi(routes.leaveStatistics, handlers.leaveStatistics)
   .openapi(routes.leaveTypeOptions, handlers.leaveTypeOptions)

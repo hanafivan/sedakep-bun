@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Page } from '../components/Layout';
 import { formatDate, leaveStatusLabel, leaveStatusTone } from '../format';
+import { YearPicker } from '../components/YearPicker';
 import * as api from '../api';
 
 /** Daftar surat tugas: cari nama/NIP/nomor/kode, filter status dan tahun. */
@@ -11,6 +12,7 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'submitted', label: 'Diajukan' },
   { value: 'approved', label: 'Disetujui' },
   { value: 'rejected', label: 'Ditolak' },
+  { value: 'cancelled', label: 'Dibatalkan' },
 ];
 
 export function Assignments() {
@@ -77,12 +79,10 @@ export function Assignments() {
             </option>
           ))}
         </select>
-        <input
-          className="year"
-          type="number"
-          placeholder="Tahun"
-          defaultValue={year}
-          onBlur={(event) => update('year', event.target.value)}
+        <YearPicker
+          value={year}
+          onChange={(y) => update('year', y)}
+          placeholder="Semua Tahun"
         />
         <Link className="button" to="/assignments/new">
           Buat surat tugas

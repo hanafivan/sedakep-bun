@@ -1,12 +1,13 @@
-import type { Pool, PoolConnection } from 'mysql2/promise';
 import { getMySql } from '../../../db/mysql';
+import { pickUpdateColumns, type Executor } from '../../../shared/db';
 
 /**
  * COMMAND = operasi tulis modul alibi. Semua INSERT/UPDATE/DELETE ada di sini.
  * Tidak ada logika bisnis di file ini.
  */
 
-export type Executor = Pool | PoolConnection;
+export type { Executor };
+export { insertAuditLog } from '../../../shared/db';
 
 export type NewAlibiRequest = {
   user_id: number;
@@ -73,19 +74,12 @@ export const updateAlibiRequest = async (
   data: Record<string, unknown>,
   executor: Executor = getMySql(),
 ): Promise<void> => {
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  for (const [key, column] of Object.entries(ALIBI_COLUMNS)) {
-    if (data[key] !== undefined) {
-      columns.push(`${column} = ?`);
-      values.push(data[key]);
-    }
-  }
-  if (columns.length === 0) return;
-  await executor.query(
-    `UPDATE alibi_requests SET ${columns.join(', ')} WHERE id = ?`,
-    [...values, id],
-  );
+  const patch = pickUpdateColumns(data, ALIBI_COLUMNS);
+  if (!patch) return;
+  await executor.query(`UPDATE alibi_requests SET ${patch.setClause} WHERE id = ?`, [
+    ...patch.values,
+    id,
+  ]);
 };
 
 const DECISION_COLUMNS = [
@@ -104,19 +98,12 @@ export const updateAlibiDecision = async (
   data: Record<string, unknown>,
   executor: Executor = getMySql(),
 ): Promise<void> => {
-  const columns: string[] = [];
-  const values: unknown[] = [];
-  for (const key of DECISION_COLUMNS) {
-    if (data[key] !== undefined) {
-      columns.push(`${key} = ?`);
-      values.push(data[key]);
-    }
-  }
-  if (columns.length === 0) return;
-  await executor.query(
-    `UPDATE alibi_requests SET ${columns.join(', ')} WHERE id = ?`,
-    [...values, id],
-  );
+  const patch = pickUpdateColumns(data, DECISION_COLUMNS);
+  if (!patch) return;
+  await executor.query(`UPDATE alibi_requests SET ${patch.setClause} WHERE id = ?`, [
+    ...patch.values,
+    id,
+  ]);
 };
 
 export const deleteAlibiRequest = async (
@@ -134,27 +121,4 @@ export const markAlibiPrinted = async (
   await executor.execute('UPDATE alibi_requests SET printed_at = ? WHERE id = ?', [printedAt, id]);
 };
 
-export const insertAuditLog = async (
-  data: {
-    actor_id?: number | null;
-    action: string;
-    entity_table: string;
-    entity_id?: number | null;
-    before_data?: unknown;
-    after_data?: unknown;
-  },
-  executor: Executor = getMySql(),
-): Promise<void> => {
-  await executor.execute(
-    `INSERT INTO audit_logs (actor_id, action, entity_table, entity_id, before_data, after_data)
-     VALUES (?,?,?,?,?,?)`,
-    [
-      data.actor_id ?? null,
-      data.action,
-      data.entity_table,
-      data.entity_id ?? null,
-      data.before_data === undefined ? null : JSON.stringify(data.before_data),
-      data.after_data === undefined ? null : JSON.stringify(data.after_data),
-    ],
-  );
-};
+

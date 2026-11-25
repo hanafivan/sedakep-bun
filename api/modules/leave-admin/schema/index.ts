@@ -47,19 +47,6 @@ export const ClosurePeriodUpdateResponseSchema = z.object({
   id: z.number(),
 }).openapi('ClosurePeriodUpdateResponse');
 
-export const QuotaBookQuerySchema = z.object({
-  year: z.coerce.number().int().optional(),
-  search: z.string().optional(),
-  page: z.coerce.number().int().positive().optional(),
-  per_page: z.coerce.number().int().positive().max(500).optional(),
-}).openapi('QuotaBookQuery');
-
-export const QuotaBookResponseSchema = z.object({
-  year: z.number(),
-  items: z.array(z.record(z.string(), z.unknown())),
-  summary: z.record(z.string(), z.unknown()).optional(),
-}).passthrough().openapi('QuotaBookResponse');
-
 export const LeaveUserDirectoryQuerySchema = z.object({
   search: z.string().optional(),
   page: z.coerce.number().int().positive().optional(),
@@ -115,6 +102,24 @@ export const LeaveYearlySummaryResponseSchema = z.array(
     total: z.number(),
   })
 ).openapi('LeaveYearlySummaryResponse');
+
+export const LeaveCrosstabQuerySchema = z.object({
+  year: z.coerce.number().int().optional(),
+}).openapi('LeaveCrosstabQuery');
+
+export const LeaveCrosstabMatrixResponseSchema = z.array(
+  z.object({
+    name: z.string(),
+    nip: z.string().nullable(),
+    ct_hari: z.number(),
+    cb_hari: z.number(),
+    cb_bulan: z.number(),
+    cs_hari: z.number(),
+    cs_bulan: z.number(),
+    cm_bulan: z.number(),
+    cp_hari: z.number(),
+  })
+).openapi('LeaveCrosstabMatrixResponse');
 
 export const LeaveExportQuerySchema = z.object({
   date_from: DateSchema.optional(),

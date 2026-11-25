@@ -71,3 +71,11 @@ export const AlibiLevelDecisionResponseSchema = z.record(z.any()).openapi('Alibi
 export const AlibiCancelResponseSchema = z.record(z.any()).openapi('AlibiCancelResponse');
 export const UploadAlibiFileSchema = z.object({ file: z.any() }).openapi('UploadAlibiFile');
 export const AlibiFileResponseSchema = z.record(z.any()).openapi('AlibiFileResponse');
+export const AlibiPdfResponseSchema = z
+  .object({
+    document_id: z.number().int().positive(),
+    url: z.string(),
+    verify_url: z.string().optional(),
+  })
+  .openapi('AlibiPdfResponse');
+

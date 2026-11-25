@@ -1,4 +1,5 @@
 import { badRequest, notFound } from '../../../shared/errors';
+import { normalizePagination, today, yearOf } from '../../../shared/helpers';
 import {
   deleteLeaveLetter,
   insertAuditLog,
@@ -28,8 +29,6 @@ import { uploadDocument, removeDocument } from '../../documents/domain';
 
 export type LetterType = 'suket' | 'suket_madrasah';
 
-const yearOf = (value: string): number => Number(String(value).slice(0, 4));
-
 /** Nomor siap tampil/cetak untuk satu baris surat. */
 const withDisplayNumber = <T extends { number: string | null; issued_at: string | null }>(letter: T) => ({
   ...letter,
@@ -42,13 +41,12 @@ export const listLetters = async (filter: {
   page?: number;
   perPage?: number;
 }) => {
-  const perPage = Math.min(Math.max(filter.perPage ?? 25, 1), 200);
-  const page = Math.max(filter.page ?? 1, 1);
+  const { page, perPage, offset } = normalizePagination(filter);
   const items = await findLeaveLetters({
     letterType: filter.letterType,
     search: filter.search,
     limit: perPage,
-    offset: (page - 1) * perPage,
+    offset,
   });
   return { items: items.map(withDisplayNumber), page, per_page: perPage };
 };
@@ -89,7 +87,7 @@ export const issueLetter = async (input: {
   const existing = (await findLeaveLetterByRequest(input.leave_request_id))
     .find((l) => l.letter_type === input.letter_type);
 
-  const issuedAt = input.issued_at ?? new Date().toISOString().slice(0, 10);
+  const issuedAt = input.issued_at ?? today();
   let number = input.number?.trim() || null;
   if (!number) {
     const seq = await nextLeaveLetterNumber(input.letter_type, year);

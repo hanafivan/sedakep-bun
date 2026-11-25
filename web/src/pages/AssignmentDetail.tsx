@@ -19,7 +19,11 @@ export function AssignmentDetail() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const [member, setMember] = useState({ name: '', nip: '', grade: '', position: '' });
+  const [member, setMember] = useState({ name: '', nip: '', grade: '', position: '', organization_name: '' });
+  const [editingMemberId, setEditingMemberId] = useState<number | null>(null);
+  const [empSearch, setEmpSearch] = useState('');
+  const [empResults, setEmpResults] = useState<api.AssignmentEmployee[]>([]);
+  const [searchingEmp, setSearchingEmp] = useState(false);
   const [note, setNote] = useState('');
   const [copyTo, setCopyTo] = useState('');
   const [numberInput, setNumberInput] = useState('');
@@ -64,6 +68,35 @@ export function AssignmentDetail() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal membuat tautan unduhan');
     }
+  };
+
+  const handleSearchEmp = async (query: string) => {
+    setEmpSearch(query);
+    if (!query.trim()) {
+      setEmpResults([]);
+      return;
+    }
+    setSearchingEmp(true);
+    try {
+      const results = await api.searchAssignmentEmployees(query.trim());
+      setEmpResults(results);
+    } catch {
+      setEmpResults([]);
+    } finally {
+      setSearchingEmp(false);
+    }
+  };
+
+  const handleSelectEmp = (emp: api.AssignmentEmployee) => {
+    setMember({
+      name: emp.name,
+      nip: emp.nip ?? '',
+      grade: emp.grade ?? '',
+      position: emp.position ?? '',
+      organization_name: emp.organization_name ?? '',
+    });
+    setEmpSearch('');
+    setEmpResults([]);
   };
 
   if (loading) {
@@ -141,15 +174,13 @@ export function AssignmentDetail() {
           </dl>
 
           <div className="actions">
-            {isFinal ? (
-              <button
-                className="button secondary small"
-                type="button"
-                onClick={() => navigate(`/assignments/${letter.id}/print`)}
-              >
-                Cetak
-              </button>
-            ) : null}
+            <button
+              className="button secondary small"
+              type="button"
+              onClick={() => navigate(`/assignments/${letter.id}/print`)}
+            >
+              {isFinal ? 'Cetak' : 'Cetak (Draf)'}
+            </button>
             {isFinal && isAdmin ? (
               <button
                 className="button small"
@@ -336,22 +367,44 @@ export function AssignmentDetail() {
                       {item.grade ? <div className="sub">{item.grade}</div> : null}
                     </td>
                     <td>{item.nip ?? '-'}</td>
-                    <td>{item.position ?? '-'}</td>
+                    <td>
+                      <div>{item.position ?? '-'}</div>
+                      {item.organization_name ? <div className="sub">{item.organization_name}</div> : null}
+                    </td>
                     <td>
                       {canEdit ? (
-                        <button
-                          className="button danger small"
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            void run(
-                              () => api.deleteAssignmentMember(letter.id, item.id),
-                              'Anggota dihapus.',
-                            )
-                          }
-                        >
-                          Hapus
-                        </button>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button
+                            className="button secondary small"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setEditingMemberId(item.id);
+                              setMember({
+                                name: item.name,
+                                nip: item.nip ?? '',
+                                grade: item.grade ?? '',
+                                position: item.position ?? '',
+                                organization_name: item.organization_name ?? '',
+                              });
+                            }}
+                          >
+                            Ubah
+                          </button>
+                          <button
+                            className="button danger small"
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(
+                                () => api.deleteAssignmentMember(letter.id, item.id),
+                                'Anggota dihapus.',
+                              )
+                            }
+                          >
+                            Hapus
+                          </button>
+                        </div>
                       ) : null}
                     </td>
                   </tr>
@@ -361,7 +414,70 @@ export function AssignmentDetail() {
 
             {canEdit ? (
               <>
-                <h3>Tambah anggota</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
+                  <h3 style={{ margin: 0 }}>{editingMemberId ? 'Ubah anggota' : 'Tambah anggota'}</h3>
+                  {!editingMemberId ? (
+                    <button
+                      className="button secondary small"
+                      type="button"
+                      onClick={() =>
+                        setMember({
+                          name: 'terlampir',
+                          nip: '',
+                          grade: '',
+                          position: 'Daftar nama terlampir',
+                          organization_name: '',
+                        })
+                      }
+                    >
+                      + Kolektif (Terlampir)
+                    </button>
+                  ) : null}
+                </div>
+
+                <div style={{ margin: '8px 0 12px', position: 'relative' }}>
+                  <input
+                    placeholder="🔍 Cari Pegawai internal (ketik nama atau NIP untuk autofill)..."
+                    value={empSearch}
+                    onChange={(event) => void handleSearchEmp(event.target.value)}
+                  />
+                  {searchingEmp ? <small style={{ color: 'var(--color-text-subtle, #64748b)' }}>Mencari pegawai...</small> : null}
+                  {empResults.length > 0 ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        zIndex: 20,
+                        backgroundColor: '#fff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '6px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {empResults.map((emp) => (
+                        <div
+                          key={emp.id}
+                          style={{
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #f1f5f9',
+                          }}
+                          onMouseDown={() => handleSelectEmp(emp)}
+                        >
+                          <strong>{emp.name}</strong>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>
+                            {emp.nip ? `NIP. ${emp.nip}` : ''} {emp.position ? `· ${emp.position}` : ''} {emp.organization_name ? `· ${emp.organization_name}` : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
                 <div className="grid2">
                   <input
                     placeholder="Nama"
@@ -374,7 +490,7 @@ export function AssignmentDetail() {
                     onChange={(event) => setMember({ ...member, nip: event.target.value })}
                   />
                   <input
-                    placeholder="Golongan"
+                    placeholder="Golongan / Pangkat"
                     value={member.grade}
                     onChange={(event) => setMember({ ...member, grade: event.target.value })}
                   />
@@ -383,26 +499,55 @@ export function AssignmentDetail() {
                     value={member.position}
                     onChange={(event) => setMember({ ...member, position: event.target.value })}
                   />
+                  <input
+                    placeholder="Unit Kerja / Instansi"
+                    value={member.organization_name}
+                    onChange={(event) => setMember({ ...member, organization_name: event.target.value })}
+                  />
                 </div>
                 <div className="actions">
                   <button
-                    className="button secondary"
+                    className="button"
                     type="button"
                     disabled={busy || !member.name.trim()}
                     onClick={() =>
                       void run(async () => {
-                        await api.addAssignmentMember(letter.id, {
-                          name: member.name.trim(),
-                          nip: member.nip || undefined,
-                          grade: member.grade || undefined,
-                          position: member.position || undefined,
-                        });
-                        setMember({ name: '', nip: '', grade: '', position: '' });
-                      }, 'Anggota ditambahkan.')
+                        if (editingMemberId) {
+                          await api.updateAssignmentMember(letter.id, editingMemberId, {
+                            name: member.name.trim(),
+                            nip: member.nip || undefined,
+                            grade: member.grade || undefined,
+                            position: member.position || undefined,
+                            organization_name: member.organization_name || undefined,
+                          });
+                          setEditingMemberId(null);
+                        } else {
+                          await api.addAssignmentMember(letter.id, {
+                            name: member.name.trim(),
+                            nip: member.nip || undefined,
+                            grade: member.grade || undefined,
+                            position: member.position || undefined,
+                            organization_name: member.organization_name || undefined,
+                          });
+                        }
+                        setMember({ name: '', nip: '', grade: '', position: '', organization_name: '' });
+                      }, editingMemberId ? 'Anggota diperbarui.' : 'Anggota ditambahkan.')
                     }
                   >
-                    Tambah anggota
+                    {editingMemberId ? 'Simpan perubahan' : 'Tambah anggota'}
                   </button>
+                  {editingMemberId ? (
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={() => {
+                        setEditingMemberId(null);
+                        setMember({ name: '', nip: '', grade: '', position: '', organization_name: '' });
+                      }}
+                    >
+                      Batal ubah
+                    </button>
+                  ) : null}
                 </div>
               </>
             ) : null}

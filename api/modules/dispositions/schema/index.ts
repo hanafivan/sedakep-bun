@@ -98,4 +98,12 @@ export const ReferenceCreateResponseSchema = z.record(z.any()).openapi('Referenc
 export const ClassificationListResponseSchema = z.array(LetterClassificationSchema).openapi('ClassificationListResponse');
 export const ClassificationCreateResponseSchema = z.record(z.any()).openapi('ClassificationCreateResponse');
 export const ClassificationUpdateResponseSchema = z.record(z.any()).openapi('ClassificationUpdateResponse');
+export const DispositionPdfResponseSchema = z
+  .object({
+    document_id: z.number().int().positive(),
+    url: z.string(),
+    verify_url: z.string().optional(),
+  })
+  .openapi('DispositionPdfResponse');
+
 

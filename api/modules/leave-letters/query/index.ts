@@ -1,7 +1,7 @@
 import { getMySql } from '../../../db/mysql';
-import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise';
+import { rows, type Executor } from '../../../shared/db';
 
-export type Executor = Pool | PoolConnection;
+export type { Executor };
 
 export type LeaveLetterRow = {
   id: number;
@@ -21,11 +21,6 @@ export type LeaveRequestSummaryRow = {
   status: string;
   leave_type: string;
   start_date: string | Date;
-};
-
-const rows = async <T>(executor: Executor, sql: string, params: unknown[] = []): Promise<T[]> => {
-  const [result] = await executor.query<RowDataPacket[]>(sql, params);
-  return result as unknown as T[];
 };
 
 export const findLeaveLetters = async (

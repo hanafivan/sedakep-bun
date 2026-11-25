@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { bearerAuth } from '../../middleware/bearerAuth';
 import { defaultHook } from '../../shared/openapi-hook';
+import { actor, toUpload } from '../../shared/helpers';
 import { successBody } from '../../shared/response';
 import { errors, okResponse } from '../../shared/openapi';
 import {
@@ -79,16 +80,15 @@ const uploadDocumentRoute = createRoute({
 
 documentRoutes.openapi(uploadDocumentRoute, async (c) => {
   const form = c.req.valid('form');
-  const actor = c.get('user');
+  const user = actor(c);
+  const upload = await toUpload(form.file);
   const result = await domain.uploadDocument({
-    buffer: Buffer.from(await form.file.arrayBuffer()),
-    filename: form.file.name,
-    mimeType: form.file.type || null,
+    ...upload,
     entityTable: form.entity_table,
     entityId: form.entity_id,
     field: form.field,
     label: form.label ?? null,
-    actorId: Number(actor.id),
+    actorId: Number(user.id),
   });
   return c.json(successBody(result, 'Dokumen tersimpan'), 200);
 });

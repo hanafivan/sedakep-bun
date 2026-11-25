@@ -397,15 +397,6 @@ export const getQuota = (year?: number) =>
 export const getStoredQuotas = (userId: number | 'me' = 'me') =>
   request<StoredQuota[]>(`/api/v1/leave/quota/stored/${userId}`);
 
-export type QuotaBookPrint = {
-  user: { id: number; name: string; nip: string | null; unit_name: string | null };
-  stored: StoredQuota[];
-  instance: Record<string, string | null>;
-};
-
-export const getQuotaBookPrint = (userId: number | 'me') =>
-  request<QuotaBookPrint>(`/api/v1/leave/quota/book/${userId}`);
-
 export const getQuotaHistory = (userId: number | 'me' = 'me', year?: number) =>
   request<QuotaAudit[]>(`/api/v1/leave/quota/history/${userId}${buildQuery({ year })}`);
 
@@ -513,6 +504,21 @@ export type LeaveYearlySummary = {
 
 export const getLeaveYearlySummary = () =>
   request<LeaveYearlySummary[]>('/api/v1/leave/admin/yearly-summary');
+
+export type LeaveCrosstabRow = {
+  name: string;
+  nip: string | null;
+  ct_hari: number;
+  cb_hari: number;
+  cb_bulan: number;
+  cs_hari: number;
+  cs_bulan: number;
+  cm_bulan: number;
+  cp_hari: number;
+};
+
+export const getLeaveCrosstab = (year?: number) =>
+  request<LeaveCrosstabRow[]>(`/api/v1/leave/admin/crosstab${buildQuery({ year })}`);
 
 /** Riwayat cuti pra-2020 hasil migrasi `tbl_n2019`. */
 export type LeaveLegacyHistoryRow = {
@@ -699,18 +705,6 @@ export const updateClosurePeriod = (
 
 export const deleteClosurePeriod = (id: number) =>
   request<null>(`/api/v1/leave/admin/closure-periods/${id}`, { method: 'DELETE' });
-
-export type QuotaBookRow = StoredQuota & {
-  user_id: number;
-  name: string;
-  nip: string | null;
-  unit_name: string | null;
-};
-
-export const getQuotaBook = (params: { year?: number; search?: string; page?: number; per_page?: number } = {}) =>
-  request<{ items: QuotaBookRow[]; page: number; per_page: number; year: number }>(
-    `/api/v1/leave/admin/quota-book${buildQuery(params)}`,
-  );
 
 export type AdminUserRow = {
   id: number;
@@ -999,6 +993,19 @@ export const deleteAssignmentMember = (letterId: number, memberId: number) =>
     method: 'DELETE',
   });
 
+export type AssignmentEmployee = {
+  id: number;
+  name: string;
+  nip: string | null;
+  grade: string | null;
+  position: string;
+  organization_name: string;
+};
+
+export const searchAssignmentEmployees = (search?: string) =>
+  request<AssignmentEmployee[]>(`/api/v1/assignment-letters/employees${buildQuery({ search })}`);
+
+
 export const addAssignmentNote = (letterId: number, note: string) =>
   request<{ id: number }>(`/api/v1/assignment-letters/${letterId}/notes`, {
     method: 'POST',
@@ -1136,6 +1143,45 @@ export const uploadAlibiFile = (id: number, file: File) => {
     method: 'POST',
     body: form,
   });
+};
+
+export type AlibiExportParams = {
+  start_date?: string;
+  end_date?: string;
+  status?: string;
+  search?: string;
+};
+
+export const downloadAlibiExport = async (params: AlibiExportParams = {}): Promise<void> => {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const response = await fetch(`/api/v1/alibi-requests/export${buildQuery(params)}`, { headers });
+  if (!response.ok) {
+    let message = `Ekspor alibi gagal (${response.status})`;
+    try {
+      const body = (await response.json()) as { message?: string };
+      if (body?.message) message = body.message;
+    } catch {
+      // fallback
+    }
+    throw new ApiError(message, response.status);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const match = disposition.match(/filename=([^;]+)/);
+  const filename = match?.[1]?.replace(/"/g, '')?.trim() ?? 'alibi_export.csv';
+
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 };
 
 // ---------------------------------------------------------------- disposisi
@@ -1548,6 +1594,13 @@ export const generateLeavePdf = (id: number) =>
 export const generateLeaveFormPdf = (id: number) =>
   request<{ document_id: number; url: string }>(`/api/v1/leave-requests/${id}/form-pdf`, { method: 'POST' });
 
+export const generateAlibiPdf = (id: number) =>
+  request<GeneratedPdf>(`/api/v1/alibi-requests/${id}/pdf`, { method: 'POST' });
+
+export const generateDispositionPdf = (id: number) =>
+  request<GeneratedPdf>(`/api/v1/incoming-letters/${id}/pdf`, { method: 'POST' });
+
+
 
 export const generateServicePdf = (id: number) =>
   request<GeneratedPdf & { letter_id: number }>(`/api/v1/service-requests/${id}/pdf`, {
@@ -1636,17 +1689,3 @@ export type NavigationBadges = {
 /** Angka badge sidebar — dari server, bukan hitungan klien. */
 export const getNavigationBadges = () =>
   request<NavigationBadges>('/api/v1/navigation/badges');
-
-export type BackupFile = { filename: string; size_bytes: number; created_at: string };
-export type BackupResult = { filename: string; size_bytes: number; documents: number };
-
-export const listBackups = () => request<BackupFile[]>('/api/v1/system/backups');
-
-export const createBackup = () =>
-  request<BackupResult>('/api/v1/system/backups', { method: 'POST' });
-
-export const restoreBackup = (filename: string) =>
-  request<{ filename: string }>('/api/v1/system/backups/restore', {
-    method: 'POST',
-    body: JSON.stringify({ filename, confirm: 'RESTORE' }),
-  });

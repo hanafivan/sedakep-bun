@@ -1,9 +1,127 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import QRCode from 'qrcode';
+import { formatDateId } from './helpers';
 
 // ---------------------------------------------------------------------------
 // Tipe data untuk PDF resmi Kemenag Sleman
 // ---------------------------------------------------------------------------
+
+export type AssignmentLetterPdfData = {
+  id: number;
+  code?: string | null;
+  letter_number?: string | null;
+  number_display?: string | null;
+  consideration?: string | null;
+  legal_basis?: string | null;
+  content?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  day_start?: string | null;
+  day_end?: string | null;
+  place?: string | null;
+  time_start?: string | null;
+  time_end?: string | null;
+  signer_name?: string | null;
+  signer_position?: string | null;
+  footnote?: string | null;
+  printed_at?: string | null;
+  created_at?: string | null;
+  status?: string | null;
+  decision?: string | null;
+  members: Array<{
+    name: string;
+    nip?: string | null;
+    grade?: string | null;
+    position?: string | null;
+    organization_name?: string | null;
+  }>;
+  notes: Array<{ note: string }>;
+  copies: Array<{ copy_to: string }>;
+  instance_name?: string | null;
+  instance_address?: string | null;
+  instance_website?: string | null;
+  verify_url?: string | null;
+  is_draft?: boolean;
+};
+
+export type AlibiLetterPdfData = {
+  id: number;
+  name: string;
+  nip?: string | null;
+  grade?: string | null;
+  position?: string | null;
+  organization_name?: string | null;
+  day_count?: string | null;
+  alibi_date?: string | null;
+  alibi_type?: string | number | null;
+  reason?: string | null;
+  time_start?: string | null;
+  time_end?: string | null;
+  approver_1_name?: string | null;
+  approver_1_nip?: string | null;
+  approver_1_position?: string | null;
+  approver_1_decision?: string | null;
+  approver_2_name?: string | null;
+  approver_2_nip?: string | null;
+  approver_2_position?: string | null;
+  approver_2_decision?: string | null;
+  status?: string | null;
+  printed_at?: string | null;
+  created_at?: string | null;
+  instance_address?: string | null;
+  verify_url?: string | null;
+  is_draft?: boolean;
+};
+
+export type DispositionSheetPdfData = {
+  id: number;
+  letter_number?: string | null;
+  agenda_number?: string | null;
+  letter_date?: string | null;
+  ticket_number?: string | null;
+  received_date?: string | null;
+  classification_code?: string | null;
+  origin?: string | null;
+  content?: string | null;
+  reviewer_name?: string | null;
+  reviewer_checked?: boolean;
+  dispositions: Array<{
+    target_name?: string | null;
+    instruction?: string | null;
+    notes?: string | null;
+    approver_name?: string | null;
+  }>;
+  officer_name?: string | null;
+  finals?: Array<{
+    name?: string | null;
+    instruction?: string | null;
+    approver_name?: string | null;
+  }>;
+  instance_address?: string | null;
+  verify_url?: string | null;
+  is_draft?: boolean;
+};
+
+export type ServiceStatementLetterPdfData = {
+  id: number;
+  letter_type: 'sphd' | 'sppid';
+  letter_number?: string | null;
+  signer_name?: string | null;
+  signer_nip?: string | null;
+  signer_grade?: string | null;
+  signer_position?: string | null;
+  employee_name: string;
+  employee_nip?: string | null;
+  birth_place?: string | null;
+  birth_date?: string | null;
+  employee_grade?: string | null;
+  employee_position?: string | null;
+  employee_organization?: string | null;
+  issued_at?: string | null;
+  instance_address?: string | null;
+  verify_url?: string | null;
+  is_draft?: boolean;
+};
 
 export type BknLeaveFormData = {
   /** Identitas pemohon */
@@ -328,18 +446,8 @@ export const formatGradeRank = (grade: string | null | undefined): string => {
   return map[g] ?? (map[g.toUpperCase()] || g);
 };
 
-const MONTHS_ID = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-];
-
-export const formatIndoDate = (dateStr: string | null | undefined): string => {
-  if (!dateStr) return '-';
-  const parts = String(dateStr).slice(0, 10).split('-');
-  if (parts.length !== 3) return String(dateStr);
-  const [y, m, d] = parts;
-  return `${Number(d)} ${MONTHS_ID[Number(m) - 1] ?? m} ${y}`;
-};
+export const formatIndoDate = (dateStr: string | null | undefined): string =>
+  formatDateId(dateStr, '-');
 
 const F4: [number, number] = [595.28, 935.43]; // 210 x 330 mm
 
@@ -842,4 +950,7 @@ export const buildLeaveLetterOfficialPdf = async (
 
   return doc.save();
 };
+
+export * from './pdf-templates';
+
 

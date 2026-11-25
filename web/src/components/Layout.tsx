@@ -11,7 +11,6 @@ import {
   IconClock,
   IconCalendar,
   IconLayers,
-  IconPieChart,
   IconHelpCircle,
   IconUser,
   IconInbox,
@@ -76,7 +75,6 @@ const menuGroups: MenuGroup[] = [
           pathMatches(pathname, '/approvals') ||
           pathMatches(pathname, '/leave/letters'),
       },
-      { to: '/quota', label: 'Buku Kuota Cuti', icon: IconPieChart, badge: 'quota' },
       { to: '/faq', label: 'FAQ Cuti', icon: IconHelpCircle },
     ],
   },
@@ -136,7 +134,6 @@ const menuGroups: MenuGroup[] = [
         activeWhen: (pathname, params) =>
           pathMatches(pathname, '/admin/leave') && params.get('tab') === 'pppk',
       },
-      { to: '/admin/backup', label: 'Backup & Restore', icon: IconDatabase, roles: ['admin'], danger: true },
     ],
   },
   {
@@ -165,12 +162,10 @@ const ROUTE_LABELS: Record<string, string> = {
   '/services': 'Layanan Kepegawaian',
   '/services/new': 'Ajukan Layanan',
   '/riwayat': 'Riwayat Pengajuan',
-  '/quota': 'Kuota Cuti',
   '/admin/users': 'Pengguna',
   '/admin/master': 'Master Data',
   '/admin/leave': 'Pengaturan Kuota Cuti',
   '/admin/settings': 'Instansi',
-  '/admin/backup': 'Backup & Restore',
   '/panduan/pdf': 'Panduan PDF',
   '/panduan/video': 'Panduan Video',
   '/migration': 'Migrasi Data',

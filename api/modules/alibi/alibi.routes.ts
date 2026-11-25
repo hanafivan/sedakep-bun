@@ -1,6 +1,5 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
-import type { Context } from 'hono';
-import { bearerAuth, type AuthUser } from '../../middleware/bearerAuth';
+import { bearerAuth } from '../../middleware/bearerAuth';
 import { requireRole } from '../../middleware/roleGuard';
 import { badRequest } from '../../shared/errors';
 import { defaultHook } from '../../shared/openapi-hook';
@@ -12,6 +11,8 @@ import {
   POST_ALIBI_METHOD,
 } from '../../shared/constant';
 import { successBody } from '../../shared/response';
+import { actor, seesAll, toUpload } from '../../shared/helpers';
+import { csvFilename } from '../../shared/csv';
 import {
   AlibiAdminDecisionResponseSchema,
   AlibiAdminDecisionSchema,
@@ -25,6 +26,7 @@ import {
   AlibiLevelDecisionResponseSchema,
   AlibiListQuerySchema,
   AlibiListResponseSchema,
+  AlibiPdfResponseSchema,
   AlibiUpdateResponseSchema,
   AlibiUpdateSchema,
   IdParamSchema,
@@ -50,10 +52,6 @@ for (const prefix of ['/alibi-requests/*/approve/level/*', '/alibi-requests/*/fi
   alibiRoutes.use(prefix, requireRole('atasan'));
 }
 
-const actor = (c: Context): AuthUser => c.get('user');
-const seesAll = (user: AuthUser) =>
-  user.role === 'admin' || user.role === 'verifikator' || user.role === 'atasan';
-
 const listAlibiRequestsRoute = createRoute({
   ...GET_ALIBI_METHOD,
   path: '/alibi-requests',
@@ -63,6 +61,31 @@ const listAlibiRequestsRoute = createRoute({
   },
   responses: {
     ...okResponse(AlibiListResponseSchema, 'Daftar alibi', 'AlibiListResponse'),
+    ...errors([401]),
+  },
+});
+
+const exportAlibiRoute = createRoute({
+  ...GET_ALIBI_METHOD,
+  path: '/alibi-requests/export',
+  summary: 'Ekspor alibi (CSV)',
+  request: {
+    query: z.object({
+      start_date: z.string().optional(),
+      end_date: z.string().optional(),
+      status: z.string().optional(),
+      search: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Unduhan file CSV alibi',
+      content: {
+        'text/csv': {
+          schema: z.string(),
+        },
+      },
+    },
     ...errors([401]),
   },
 });
@@ -158,6 +181,17 @@ const uploadAlibiFileRoute = createRoute({
   },
 });
 
+const generateAlibiPdfRoute = createRoute({
+  ...POST_ALIBI_METHOD,
+  path: '/alibi-requests/{id}/pdf',
+  summary: 'Hasilkan PDF resmi surat alibi + QR verifikasi',
+  request: { params: IdParamSchema },
+  responses: {
+    ...okResponse(AlibiPdfResponseSchema, 'PDF alibi dibuat', 'AlibiPdfResponse'),
+    ...errors([401, 404]),
+  },
+});
+
 alibiRoutes.openapi(listAlibiRequestsRoute, async (c) => {
   const query = c.req.valid('query');
   const user = actor(c);
@@ -171,6 +205,22 @@ alibiRoutes.openapi(listAlibiRequestsRoute, async (c) => {
     perPage: query.per_page,
   });
   return c.json(successBody(result, 'Daftar alibi'), 200);
+});
+
+alibiRoutes.openapi(exportAlibiRoute, async (c) => {
+  const query = c.req.valid('query');
+  const user = actor(c);
+  const csv = await domain.exportAlibiCsv({
+    startDate: query.start_date,
+    endDate: query.end_date,
+    status: query.status,
+    search: query.search,
+    userId: seesAll(user) ? undefined : Number(user.id),
+  });
+  const filename = csvFilename('alibi_export');
+  c.header('Content-Type', 'text/csv; charset=utf-8');
+  c.header('Content-Disposition', `attachment; filename="${filename}"`);
+  return c.body(csv, 200);
 });
 
 alibiRoutes.openapi(createAlibiRequestRoute, async (c) => {
@@ -233,12 +283,15 @@ alibiRoutes.openapi(uploadAlibiFileRoute, async (c) => {
   if (!(file instanceof File)) throw badRequest('Berkas wajib dilampirkan');
   const result = await domain.attachAlibiFile(
     id,
-    {
-      buffer: Buffer.from(await file.arrayBuffer()),
-      filename: file.name || 'berkas',
-      mimeType: file.type || null,
-    },
+    await toUpload(file),
     actor(c),
   );
   return c.json(successBody(result, 'Berkas alibi tersimpan'), 200);
 });
+
+alibiRoutes.openapi(generateAlibiPdfRoute, async (c) => {
+  const { id } = c.req.valid('param');
+  const result = await domain.generateAlibiPdf(id, actor(c));
+  return c.json(successBody(result, 'PDF alibi berhasil dibuat'), 200);
+});
+

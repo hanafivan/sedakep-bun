@@ -54,6 +54,34 @@ export const listLeaveRequests = createRoute({
 });
 export type ListLeaveRequestsRoute = typeof listLeaveRequests;
 
+export const exportLeaveRequests = createRoute({
+  ...GET_LEAVE_METHOD,
+  path: '/leave-requests/export',
+  summary: 'Ekspor permohonan cuti (CSV)',
+  request: {
+    query: z.object({
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      leaveType: z.string().optional(),
+      status: z.string().optional(),
+      search: z.string().optional(),
+      letterStatus: z.enum(['with', 'without']).optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Unduhan berkas CSV cuti',
+      content: {
+        'text/csv': {
+          schema: z.string(),
+        },
+      },
+    },
+    ...errors([401]),
+  },
+});
+export type ExportLeaveRequestsRoute = typeof exportLeaveRequests;
+
 export const approvalSummary = createRoute({
   ...GET_LEAVE_METHOD,
   path: '/leave/approvals/summary',

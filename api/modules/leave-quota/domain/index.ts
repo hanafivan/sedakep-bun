@@ -6,5 +6,4 @@ export {
   getQuotaHistory,
   getStoredQuotas,
   rebuildUserQuota,
-  getQuotaBookPrint,
 } from '../../leave-requests/domain/leave.domain';
